@@ -1,0 +1,715 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "location": {
+            "type": "string",
+            "metadata": {
+                "description": "The region where Azure will house the deployment."
+            },
+            "minLength": 5
+        },
+        "_artifactsLocation": {
+            "type": "string",
+            "metadata": {
+                "description": "The URL specifying the location of the installation files.",
+                "artifactsBaseUrl": ""
+            }
+        },
+        "_artifactsLocationSasToken": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "The Shared Access Signature (SAS) token that provides access to resources in the storage account."
+            }
+        },
+        "clusterSize": {
+            "type": "int",
+            "defaultValue": 2,
+            "metadata": {
+                "description": "The number of nodes in the Jira cluster."
+            },
+            "minValue": 1
+        },
+        "clusterVmSize": {
+            "type": "string",
+            "defaultValue": "Standard_DS3_v2",
+            "allowedValues": [
+                "Standard_DS2_v2",
+                "Standard_DS3_v2",
+                "Standard_DS4_v2",
+                "Standard_DS5_v2",
+                "Standard_F4s_v2",
+                "Standard_F8s_v2",
+                "Standard_F16s_v2",
+                "Standard_F32s_v2",
+                "Standard_F64s_v2",
+                "Standard_F72s_v2",
+                "Standard_E8s_v3",
+                "Standard_E16s_v3",
+                "Standard_E20s_v3",
+                "Standard_E32s_v3"
+            ],
+            "metadata": {
+                "description": "The size of the virtual machine to use for each Jira node in the cluster."
+            }
+        },
+        "sshKey": {
+            "type": "string",
+            "metadata": {
+                "description": "The SSH public key to use to access the Jumpbox."
+            },
+            "minLength": 300
+        },
+        "sshUserName": {
+            "type": "string",
+            "defaultValue": "jiraadmin",
+            "metadata": {
+                "description": "The SSH username to use to access the Jira nodes from the Jumpbox. Note that this is the only way to access the Jira nodes."
+            }
+        },
+        "cname": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "An existing Canonical Name record (CNAME) to use to access the JIRA instance."
+            }
+        },
+        "dbCreateNew": {
+            "type": "bool",
+            "defaultValue": true,
+            "metadata": {
+                "description": "Create a new database or attempt to use an existing specified database. Note that this has to be in same resource group and location as the target deployment."
+            }
+        },
+        "dbType": {
+            "type": "string",
+            "allowedValues": [
+                "sqlserver",
+                "postgres",
+                "mysql"
+            ],
+            "defaultValue": "sqlserver",
+            "metadata": {
+                "description": "The database type."
+            }
+        },
+        "dbPort": {
+            "type": "string",
+            "defaultValue": "[if(equals(parameters('dbType'), 'sqlserver'), '1433', if(equals(parameters('dbType'), 'postgres'), '5432', '3306'))]",
+            "metadata": {
+                "description": "The database port to use if an existing Azure database is being used. 1433 for MS SQL, 5432 for PostgreSQL, 3306 for MySQL."
+            }
+        },
+        "dbDatabase": {
+            "type": "string",
+            "defaultValue": "jiradatabase",
+            "metadata": {
+                "description": "The name of the Jira database."
+            }
+        },
+        "dbSchema": {
+            "type": "string",
+            "defaultValue": "[if(parameters('dbCreateNew'), if(equals(parameters('dbType'), 'sqlserver'), 'jiraschema', 'public'), 'jiraschema')]",
+            "metadata": {
+                "description": "The Jira database schema to use."
+            }
+        },
+        "dbUsername": {
+            "type": "string",
+            "defaultValue": "jira",
+            "metadata": {
+                "description": "The username for the dedicated database user."
+            }
+        },
+        "dbPassword": {
+            "type": "securestring",
+            "minLength": 8,
+            "metadata": {
+                "description": "The password for the dedicated database user."
+            }
+        },
+        "jiraProduct": {
+            "type": "string",
+            "allowedValues": [
+                "jira-software",
+                "servicedesk"
+            ],
+            "defaultValue": "jira-software",
+            "metadata": {
+                "description": "The Jira software product to install."
+            }
+        },
+        "jiraVersion": {
+            "type": "string",
+            "defaultValue": "latest",
+            "metadata": {
+                 "description": "The Jira software product version to install. By default the deployment will download and use the latest version published."
+             }
+         },
+         "customDownloadUrl": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                 "description": "Use this URL to override standard Atlassian download url eg for EAP, RC versions. NB will be used in conjunction with the jiraVersion parameter."
+             }
+         },
+        "jiraAdminUserName": {
+            "type": "string",
+            "defaultValue": "admin",
+            "minLength": 5,
+            "metadata": {
+                "description": "The username for the Jira administrator's account."
+            }
+        },
+        "jiraAdminUserPassword": {
+            "type": "securestring",
+            "minLength": 5,
+            "metadata": {
+                "description": "The password for the Jira administrator's account."
+            }
+        },
+        "jiraAdminUserFullname": {
+            "type": "string",
+            "defaultValue": "Admin Admin",
+            "minLength": 5,
+            "metadata": {
+                "description": "The fullname for the Jira administrator's account."
+            }
+        },
+        "jiraAdminUserEmail": {
+            "type": "string",
+            "defaultValue": "admin@example.com",
+            "minLength": 5,
+            "metadata": {
+                "description": "The email address of the Jira administrator user."
+            }
+        },
+        "jiraAppTitle": {
+            "type": "string",
+            "defaultValue": "Atlassian Jira",
+            "metadata": {
+                "description": "The name of the Jira site."
+            }
+        },
+        "vnetName": {
+            "type": "string",
+            "metadata": {
+                "description": "The name of the Jira virtual network."
+            }
+        },
+        "appSubnetName": {
+            "type": "string",
+            "metadata": {
+                "description": "The name of the subnet within the Jira virtual network where the Jira cluster is located."
+            }
+        },
+        "jumpboxName": {
+            "type": "string",
+            "metadata": {
+                "description": "The name of the Jumpbox."
+            }
+        },
+        "sslBase64EncodedPfxCertificate": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "The certificate to be used for SSL termination on the Azure Application Gateway."
+            }
+        },
+        "appInsightsInstrumentKey": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+              "description": "The Application Insights instrumentation key."
+            }
+        },
+        "gtwyName": {
+            "type": "string",
+            "metadata": {
+              "description": "The name of the Application Gateway."
+            }
+        },
+        "gtwyAddressPoolName": {
+            "type": "string",
+            "metadata": {
+              "description": "The name of the Application Gateway's address pool."
+            }
+        },
+        "jiraBaseUrl": {
+            "type": "string",
+            "metadata": {
+                "description": "The base URL of the Jira instance."
+            }
+        },
+        "jiraDbServerName": {
+            "type": "string",
+            "metadata": {
+                "description": "The Jira database server name."
+            }
+        },
+        "storageAccessKey": {
+            "type": "securestring",
+            "metadata": {
+                "description": "The storage access key used to authorize access to the storage account."
+            }
+        },
+        "enableAcceleratedNetworking": {
+            "type": "bool",
+            "defaultValue": true,
+            "metadata": {
+                "description": "Enable accelerated networking. Note that this needs to be on a supported instance type."
+            }
+        },
+        "workspaceId": {
+            "type": "string",
+            "metadata": {
+                "description": "The ID of the Azure Operations Management Suite (OMS) workspace."
+            }
+        },
+        "workspacePrimaryKey": {
+            "type": "string",
+            "metadata": {
+                "description": "The primary key of the Azure Operations Management Suite (OMS) workspace."
+            }
+        },
+        "workspaceSecondaryKey": {
+            "type": "string",
+            "metadata": {
+                "description": "The secondary key of the Azure Operations Management Suite (OMS) workspace."
+            }
+        },
+        "clusterVmDiskSize": {
+            "type": "int",
+            "defaultValue": 1000,
+            "metadata": {
+                "description": "The desired size of the Cluster Node's allocation disk in GB"
+            }
+        },
+        "clusterVmDiskCount": {
+            "type": "int",
+            "defaultValue": 8,
+            "minValue": 8,
+            "maxValue": 32,
+            "metadata": {
+                "description": "The requested Cluster Node disk will be striped for performance. Essentially the desired disk size will be divided by the clusterVmDiskCount and can't exceed 1023 GB.. The clusterVmDiskCount count can't exceed the MaxDiskCount assigned to the VM Size."
+            }
+        },
+        "linuxOsType": {
+            "type": "string",
+            "defaultValue": "Canonical:UbuntuServer:18.04-LTS",
+            "allowedValues": [
+                "Canonical:UbuntuServer:16.04-LTS",
+                "Canonical:UbuntuServer:18.04-LTS",
+                "RedHat:RHEL:7.5",
+                "OpenLogic:CentOS:7.5",
+                "credativ:Debian:9-backports"
+            ],
+            "metadata": {
+                "description": "Select your preferred Linux OS type. The selected Linux OS type has to support Accelerated Networking as well - https://docs.microsoft.com/en-us/azure/virtual-network/create-vm-accelerated-networking-cli"
+            }
+        },
+        "blobStorageUri": {
+            "type": "string"
+        }
+    },
+    "variables": {
+        "namespace": "jira",
+        "isSslSpecified": "[not(empty(parameters('sslBase64EncodedPfxCertificate')))]",
+        "env": {
+            "storage": [
+                {
+                    "name": "STORAGE_BASE_URL",
+                    "value": "[if(endsWith(parameters('_artifactsLocation'), '/'), parameters('_artifactsLocation'), concat(parameters('_artifactsLocation'), '/'))]"
+                },
+                {
+                    "name": "STORAGE_TOKEN",
+                    "value": "[parameters('_artifactsLocationSasToken')]"
+                },
+                {
+                    "name": "STORAGE_ACCOUNT",
+                    "value": "[variables('jira').storage.name]"
+                }
+            ],
+            "server": [
+                {
+                    "name": "SERVER_APP_PORT",
+                    "value": "8080"
+                },
+                {
+                    "name": "SERVER_CNAME",
+                    "value": "[parameters('cname')]"
+                },
+                {
+                    "name": "SERVER_PROXY_PORT",
+                    "value": "[if(variables('isSslSpecified'), '443', '80')]"
+                },
+                {
+                    "name": "SERVER_APP_SCHEME",
+                    "value": "[if(variables('isSslSpecified'), 'https', 'http')]"
+                },
+                {
+                    "name": "SERVER_CLUSTER_NAME",
+                    "value": "jiracluster"
+                },
+                {
+                    "name": "SERVER_CATALINA_HOME",
+                    "value": "/catalina/home/placeholder"
+                },
+                {
+                    "name": "SERVER_SECURE_FLAG",
+                    "value": "[if(variables('isSslSpecified'), 'true', 'false')]"
+                },
+                {
+                    "name": "SERVER_SSH_USER",
+                    "value": "[parameters('sshUserName')]"
+                },
+                {
+                    "name": "APPINSIGHTS_VER",
+                    "value": "2.3.0"
+                },
+                {
+                    "name": "OMS_WORKSPACE_ID",
+                    "value": "[parameters('workspaceId')]"
+                },
+                {
+                    "name": "OMS_PRIMARY_KEY",
+                    "value": "[parameters('workspacePrimaryKey')]"
+                },
+                {
+                    "name": "OMS_SECONDARY_KEY",
+                    "value": "[parameters('workspaceSecondaryKey')]"
+                }
+            ],
+            "db": [
+                {
+                    "name": "DB_USER",
+                    "value": "[parameters('dbUsername')]"
+                },
+                {
+                    "name": "DB_PASSWORD",
+                    "value": "[parameters('dbPassword')]"
+                },
+                {
+                    "name": "DB_NAME",
+                    "value": "[if(equals(parameters('dbType'), 'sqlserver'), parameters('dbDatabase'), toLower(parameters('dbDatabase')))]"
+                },
+                {
+                    "name": "DB_SCHEMA",
+                    "value": "[if(equals(parameters('dbType'), 'sqlserver'), parameters('dbSchema'), toLower(parameters('dbSchema')))]"
+                },
+                {
+                    "name": "DB_PORT",
+                    "value": "[if(parameters('dbCreateNew'), if(equals(parameters('dbType'), 'sqlserver'), '1433', '5432'), parameters('dbPort'))]"
+                },
+                {
+                    "name": "DB_TYPE",
+                    "value": "[parameters('dbType')]"
+                },
+                {
+                    "name": "DB_CREATE",
+                    "value": "[parameters('dbCreateNew')]"
+                }
+            ],
+            "sql": [
+                {
+                    "name": "USER_NAME",
+                    "value": "[parameters('jiraAdminUserName')]"
+                },
+                {
+                    "name": "USER_NAME_LOWERCASE",
+                    "value": "[toLower(parameters('jiraAdminUserName'))]"
+                },
+                {
+                    "name": "USER_FULLNAME",
+                    "value": "[parameters('jiraAdminUserFullname')]"
+                },
+                {
+                    "name": "USER_FULLNAME_LOWERCASE",
+                    "value": "[toLower(parameters('jiraAdminUserFullname'))]"
+                },
+                {
+                    "name": "USER_EMAIL",
+                    "value": "[parameters('jiraAdminUserEmail')]"
+                },
+                {
+                    "name": "USER_EMAIL_LOWERCASE",
+                    "value": "[toLower(parameters('jiraAdminUserEmail'))]"
+                },
+                {
+                    "name": "USER_CREDENTIAL",
+                    "value": "[parameters('jiraAdminUserPassword')]"
+                },
+                {
+                    "name": "JIRA_LICENSE",
+                    "value": "[if(variables('isJiraProduct'), variables('jira').license, variables('servicedesk').license)]"
+                },
+                {
+                    "name": "APPLICATION_TITLE",
+                    "value": "[parameters('jiraAppTitle')]"
+                }
+            ],
+            "settings": [
+                {
+                    "name": "ATL_JIRA_HOME",
+                    "value": "/var/atlassian/application-data/jira"
+                },
+                {
+                    "name": "ATL_JIRA_SHARED_HOME",
+                    "value": "/media/atl/jira/shared"
+                },
+                {
+                    "name": "ATL_JIRA_INSTALL_DIR",
+                    "value": "/opt/atlassian/jira"
+                },
+                {
+                    "name": "ATL_JIRA_SHARED_HOME_NAME",
+                    "value": "jira-shared-home"
+                },
+                {
+                    "name": "ATL_JIRA_RELEASES_BASE_URL",
+                    "value": "https://s3.amazonaws.com/atlassian-software/releases"
+                },
+                {
+                    "name": "ATL_JIRA_PRODUCT",
+                    "value": "[parameters('jiraProduct')]"
+                },
+                {
+                    "name": "ATL_JIRA_PRODUCT_VERSION",
+                    "value": "[parameters('jiraVersion')]"
+                },
+                {
+                    "name": "ATL_JIRA_CUSTOM_DOWNLOAD_URL",
+                    "value": "[parameters('customDownloadUrl')]"
+                }
+            ]
+        },
+        "jira": {
+            "storage": {
+                "name": "[concat(variables('namespace'), 'storage', uniqueString(resourceGroup().id))]"
+            },
+            "cluster": {
+                "name": "[concat(variables('namespace'), 'cluster')]",
+                "tier": "Standard",
+                "vm": {
+                    "size": "[parameters('clusterVmSize')]",
+                    "image": {
+                        "publisher": "[split(parameters('linuxOsType'), ':')[0]]",
+                        "offer": "[split(parameters('linuxOsType'), ':')[1]]",
+                        "sku": "[split(parameters('linuxOsType'), ':')[2]]",
+                        "version": "latest"
+                    },
+                    "osdisk": {
+                        "type": "Premium_LRS",
+                        "size": "100"
+                    },
+                    "datadisk": {
+                        "type": "Premium_LRS",
+                        "caching": "ReadWrite",
+                        "size": "[if(greater(div(parameters('clusterVmDiskSize'), parameters('clusterVmDiskCount')), 1020), 1020, div(parameters('clusterVmDiskSize'), parameters('clusterVmDiskCount')))]"
+                    }
+                }
+            },
+            "license": "AAAB8A0ODAoPeNp9Ul1vmzAUfedXWNrLFgmSknaVIiEtA2/L1EAEZB9a9+CYm8QtsS3btMt+/Yyh6gddEDyY63PuueeeN9+hQgVIFF6iSTg7n87OL9DnZYnCydmlt1MAfC+kBBVcMQpcA66YYYJHOC1xvsoXBfbS5rABlW3XGpSOwgsvFtwQalJygEg3UgplPhBTE60Z4QEVB++GKRIMcKtG0T3RkBADUSvAn5zZ1+tbl0cJjjPOlkucx4v51UMJ/5FMHR1uNZ2+//IgAS8Jq09pkEpUDTVBe/C12Jp7oiCwSHYHkVENnLpm+5EYuAHVXS2ajaaKSWeQ+/OKga9N4Xr83+DRaJRmpf8py/1VniXruFxkqb8usC1EsQI7doU2R2T2gHoWhDkVFShkld8ANejX3hh5PRuPdyJ45sO47hA+dIjfAUoE4sKgimmj2KYxYJmZRkYg2mgjDnZdgWedtZNzwunQfasrzvG8xIn/8WcrkoA6iBr4rXixhF7uIonW/JaLe37K70Fg3N3BFnAa2c//4Z5TfIUhqoVtSa3By9SOcKaJc7+ypD51rD752yjwnM+29DKcvX3frKQWGD7buSOQiuk+TAk8BuTrIp+joteC3rZjoG6Od9czhO9I3biG3QSDSJ6I01MFT3GPnN35Hw9baBMwLAIUarbD2ZcwPRpegxJGdSMJtiQjn/QCFGulFcz4pDzNWDZGR6RTwSNU/ARaX02nf"
+        },
+        "servicedesk": {
+            "license": "AAAB7g0ODAoPeNqFkstu2zAQRff6CgLdGaD8iBs7BgS0kdjUQSIJshwgfSxoamwzkUiBpNz47zu2bCRpoXbBhTScuYf3zoe8ARKBIMMpGY5n48lsPCI39zkZDYZT70ka7tdGF41w/uGDWjA7KaAA++xz4eQOAmca8OKmWoFJ1ku8YIPhwAu1cngh5hUE1RZUgf+1+sRdya2VXPlCVx4e//VP1+y0MWLLLUTcQXDgosMRRbo7vKws5PsajjIRe2B3Scqyc4W91NLsj23pxeXg6xmK3XNZdlMtkAPMPAqu2YTRcfRtRC+T2wm9ubiaerfoQnpyBCfzEJQz8I63+1XdxP92urtv0aysMLJ2UqtW/TjpbEAhjwUW5yxLs/mC/Uforxh7vV6c5PRLktE0S6JlmM+TmC4XDAtBaAC9LchqT9wWyEmUMCU0GktQ5QmEI9+3ztU/Zv3+RvvvnO6XbQeFtuOnTyJNlHakkNYZuWoc4GRpidNENNbpCrF8D+NTDhRX4m3EuBlXp81AuDBjn3MW0evHA2ln1idmDHupnpX+pbwFiwM89ONg0Jp1ThlMa3BiNlxJy1tnX3hVl0BCXdVc7b2jJVj4c1cjeI0pB+vI6elkrdGostlIRQrYQalrxGyF3+4U2/GyaSXXvLTg/QbUe0yuMC0CFQCJ2oIvh0hveJWMKS7iMVx9J2XU2AIUQa2ydw3DaUZRGgzW5Q4aiWkd4OI=X02nf"
+        },
+        "isJiraProduct": "[equals(parameters('jiraProduct'), 'jira-software')]",
+        "data": {
+            "storage": "[concat(' STORAGE_ATL_ENV_DATA=\"', base64(string(variables('env').storage)), '\" ')]",
+            "server": "[concat(' SERVER_ATL_ENV_DATA=\"', base64(string(variables('env').server)), '\" ')]",
+            "db": "[concat(' DB_ATL_ENV_DATA=\"', base64(string(variables('env').db)), '\" ')]",
+            "sql": "[concat(' SQL_ATL_ENV_DATA=\"', base64(string(variables('env').sql)), '\" ')]",
+            "settings": "[concat(' SETTINGS_ATL_ENV_DATA=\"', base64(string(variables('env').settings)), '\" ')]"
+        },
+        "tags": {
+            "vendor": "Atlassian",
+            "product": "JIRA",
+            "provider": "2F0AF47A-92C7-413A-9009-C3815BFF7AF6"
+        },
+        "scripts": {
+            "prepare": {
+                "name": "prepare_install.sh",
+                "env": "[concat(variables('data').storage, variables('data').server, variables('data').db, variables('data').sql, variables('data').settings)]"
+            }
+        },
+        "jiraPrepareCmd": "[concat(variables('scripts').prepare.env, './prepare_install.sh ', parameters('storageAccessKey'), ' prepare ', parameters('jiraBaseUrl'), ' ', parameters('jiraDbServerName'), ' ', if(variables('isSslSpecified'), 'https', 'http'), ' ', if(not(empty(parameters('appInsightsInstrumentKey'))), parameters('appInsightsInstrumentKey'), ' '), ' 1>&1 2>&1 > ./jira.prepare.log')]",
+        "jiraInstallCmd": "[concat(variables('scripts').prepare.env, './prepare_install.sh ', parameters('storageAccessKey'), ' install ', if(not(empty(parameters('appInsightsInstrumentKey'))), parameters('appInsightsInstrumentKey'), ' '), ' 1>&1 2>&1 > ./jira.install-$(uname -n).log')]",
+        "isMsSql": "[equals(parameters('dbType'), 'sqlserver')]",
+        "servicedeskDbScriptTemplate": "[if(variables('isMsSql'), 'templates/servicedesk_mssql_db.sql.template', 'templates/servicedesk_postgres_db.sql.template')]",
+        "jiraDbScriptTemplate": "[if(variables('isMsSql'), 'templates/jira_db.sql.template', 'templates/jira_postgres_db.sql.template')]",
+        "dbScriptTemplate": "[if(variables('isJiraProduct'), variables('jiraDbScriptTemplate'), variables('servicedeskDbScriptTemplate'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Compute/virtualMachines/extensions",
+            "apiVersion": "2018-06-01",
+            "name": "[concat(parameters('jumpboxName'), '/prepare-install-script')]",
+            "location": "[parameters('location')]",
+            "tags": "[variables('tags')]",
+            "properties": {
+                "publisher": "Microsoft.Azure.Extensions",
+                "type": "CustomScript",
+                "typeHandlerVersion": "2.0",
+                "autoUpgradeMinorVersion": true,
+                "settings": {
+                    "fileUris": [
+                        "[uri(parameters('_artifactsLocation'), concat('scripts/prepare_install.sh', parameters('_artifactsLocationSasToken')))]",
+                        "[uri(parameters('_artifactsLocation'), concat('scripts/hydrate_jira_config.py', parameters('_artifactsLocationSasToken')))]",
+                        "[uri(parameters('_artifactsLocation'), concat('templates/dbconfig.xml.template', parameters('_artifactsLocationSasToken')))]",
+                        "[uri(parameters('_artifactsLocation'), concat(variables('dbScriptTemplate'), parameters('_artifactsLocationSasToken')))]",
+                        "[uri(parameters('_artifactsLocation'), concat('templates/databaseChangeLog.xml.template', parameters('_artifactsLocationSasToken')))]",
+                        "[uri(parameters('_artifactsLocation'), concat('templates/server.xml.template', parameters('_artifactsLocationSasToken')))]",
+                        "[uri(parameters('_artifactsLocation'), concat('templates/ApplicationInsights.xml.template', parameters('_artifactsLocationSasToken')))]",
+                        "[uri(parameters('_artifactsLocation'), concat('templates/jira-collectd.conf.template', parameters('_artifactsLocationSasToken')))]"
+                    ]
+                },
+                "protectedSettings": {
+                    "commandToExecute": "[variables('jiraPrepareCmd')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Compute/virtualMachineScaleSets",
+            "name": "[variables('jira').cluster.name]",
+            "location": "[parameters('location')]",
+            "apiVersion": "2018-06-01",
+            "dependsOn": [
+                "[concat('Microsoft.Compute/virtualMachines/',parameters('jumpboxName'),'/extensions/prepare-install-script')]"
+            ],
+            "sku": {
+                "name": "[variables('jira').cluster.vm.size]",
+                "tier": "[variables('jira').cluster.tier]",
+                "capacity": "[parameters('clusterSize')]"
+            },
+            "properties": {
+                "overprovision": false,
+                "singlePlacementGroup": false,
+                "upgradePolicy": {
+                    "mode": "Manual"
+                },
+                "virtualMachineProfile": {
+                    "osProfile": {
+                        "computerNamePrefix": "jiranode-",
+                        "adminUsername": "[parameters('sshUserName')]",
+                        "linuxConfiguration": {
+                            "disablePasswordAuthentication": true,
+                            "ssh": {
+                                "publicKeys": [
+                                    {
+                                        "path": "[concat('/home/', parameters('sshUserName'), '/.ssh/authorized_keys')]",
+                                        "keyData": "[parameters('sshKey')]"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "storageProfile": {
+                        "imageReference": {
+                            "publisher": "[variables('jira').cluster.vm.image.publisher]",
+                            "offer": "[variables('jira').cluster.vm.image.offer]",
+                            "sku": "[variables('jira').cluster.vm.image.sku]",
+                            "version": "[variables('jira').cluster.vm.image.version]"
+                        },
+                        "osDisk": {
+                            "managedDisk": {
+                                "storageAccountType": "[variables('jira').cluster.vm.osdisk.type]"
+                            },
+                            "diskSizeGB": "[variables('jira').cluster.vm.osdisk.size]",
+                            "createOption": "FromImage"
+                        },
+                       "copy": [
+                            {
+                                "name": "dataDisks",
+                                "count": "[parameters('clusterVmDiskCount')]",
+                                "input": {
+                                    "lun": "[copyIndex('dataDisks')]",
+                                    "caching": "[variables('jira').cluster.vm.datadisk.caching]",
+                                    "createOption": "Empty",
+                                    "diskSizeGB": "[variables('jira').cluster.vm.datadisk.size]",
+                                    "managedDisk": {
+                                        "storageAccountType": "[variables('jira').cluster.vm.datadisk.type]"
+                                    }
+                                }
+                            }
+                        ]
+                    },
+                    "networkProfile": {
+                        "networkInterfaceConfigurations": [
+                            {
+                                "name": "[concat(variables('namespace'), 'scaleset-nic')]",
+                                "properties": {
+                                    "primary": true,
+                                    "enableAcceleratedNetworking": "[parameters('enableAcceleratedNetworking')]",
+                                    "ipConfigurations": [
+                                        {
+                                            "name": "[concat(variables('namespace'), 'scalset-ipconfig')]",
+                                            "properties": {
+                                                "subnet": {
+                                                    "id": "[concat(resourceId('Microsoft.Network/virtualNetworks', parameters('vnetName')), '/subnets/', parameters('appSubnetName'))]"
+                                                },
+                                                "ApplicationGatewayBackendAddressPools": [
+                                                    {
+                                                        "id": "[resourceId('Microsoft.Network/applicationGateways/backendAddressPools', parameters('gtwyName'), parameters('gtwyAddressPoolName'))]"
+                                                    }
+                                                ]
+                                            }
+                                        }
+                                    ]
+                                }
+                            }
+                        ]
+                    },
+                    "diagnosticsProfile": {
+                        "bootDiagnostics": {
+                            "enabled": true,
+                            "storageUri": "[parameters('blobStorageUri')]"
+                        }
+                    },
+                    "extensionProfile": {
+                        "extensions": [
+                            {
+                                "name": "jira-install-script",
+                                "properties": {
+                                    "publisher": "Microsoft.Azure.Extensions",
+                                    "type": "CustomScript",
+                                    "typeHandlerVersion": "2.0",
+                                    "autoUpgradeMinorVersion": true,
+                                    "settings": {
+                                        "fileUris": [
+                                            "[uri(parameters('_artifactsLocation'), concat('scripts/prepare_install.sh', parameters('_artifactsLocationSasToken')))]",
+                                            "[uri(parameters('_artifactsLocation'), concat('scripts/appinsights_transform_web_xml.xsl', parameters('_artifactsLocationSasToken')))]",
+                                            "[uri(parameters('_artifactsLocation'), concat('scripts/vm-disk-utils-0.1.sh', parameters('_artifactsLocationSasToken')))]"
+                                        ]
+                                    },
+                                    "protectedSettings": {
+                                        "commandToExecute": "[variables('jiraInstallCmd')]"
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                }
+            }
+        }
+    ],
+    "outputs": {
+        "clusterName": {
+            "type": "string",
+            "value": "[variables('jira').cluster.name]"
+        },
+        "prepareCmdArgs": {
+            "type": "string",
+            "value": "[variables('jiraPrepareCmd')]"
+        },
+        "installJiraCmdArgs": {
+            "type": "string",
+            "value": "[variables('jiraInstallCmd')]"
+        },
+        "vmmsSingleDiskSizeGB": {
+            "type": "int",
+            "value": "[variables('jira').cluster.vm.datadisk.size]"
+        }
+    }
+}

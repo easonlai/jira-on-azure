@@ -1,0 +1,350 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "location": {
+            "type": "string",
+            "metadata": {
+                "description": "The region where Azure will house the deployment."
+            },
+            "minLength": 5
+        },
+        "jumpboxVmSize": {
+            "type": "string",
+            "defaultValue": "Standard_B1s",
+            "metadata": {
+                "description": "The size of the virtual machine to use for the Jumpbox."
+            }
+        },
+        "sshKey": {
+            "type": "string",
+            "metadata": {
+                "description": "The SSH public key to use to access the Jumpbox."
+            },
+            "minLength": 300
+        },
+        "sshUserName": {
+            "type": "string",
+            "defaultValue": "jiraadmin",
+            "metadata": {
+                "description": "The SSH username to use to access the Jira nodes from the Jumpbox. Note that this is the only way to access the Jira nodes."
+            }
+        },
+        "linuxOsType": {
+            "type": "string",
+            "defaultValue": "Canonical:UbuntuServer:18.04-LTS",
+            "allowedValues": [
+                "Canonical:UbuntuServer:16.04-LTS",
+                "Canonical:UbuntuServer:18.04-LTS",
+                "RedHat:RHEL:7.5",
+                "OpenLogic:CentOS:7.5",
+                "credativ:Debian:9-backports"
+            ],
+            "metadata": {
+                "description": "Select your preferred Linux OS type. Bear in mind, the Linux OS type has to support Accelerated Networking as well - https://docs.microsoft.com/en-us/azure/virtual-network/create-vm-accelerated-networking-cli"
+            }
+        }
+    },
+    "variables": {
+        "namespace": "jira",
+        "tags": {
+            "vendor": "Atlassian",
+            "product": "JIRA",
+            "provider": "2F0AF47A-92C7-413A-9009-C3815BFF7AF6"
+        },
+        "vnet": {
+            "name": "TestJira-vnet-2",
+            "prefix": "10.0.16.0/22"
+        },
+        "gtwySubnet": {
+            "name": "appgwsubnet",
+            "prefix": "10.0.17.0/24"
+        },
+        "appSubnet": {
+            "name": "appsubnet",
+            "prefix": "10.0.16.0/24",
+            "nsg": {
+                "name": "[concat(variables('namespace'), 'cluster', 'nsg')]"
+            }
+        },
+        "jumpbox": {
+            "name": "[concat(variables('namespace'), 'jumpbox')]",
+            "nsg": {
+                "name": "[concat(variables('namespace'), 'jumpbox', 'nsg')]"
+            },
+            "vm": {
+                "size": "[parameters('jumpboxVmSize')]",
+                "user": "[parameters('sshUserName')]",
+                "key": "[parameters('sshKey')]",
+                "image": {
+                    "publisher": "[split(parameters('linuxOsType'), ':')[0]]",
+                    "offer": "[split(parameters('linuxOsType'), ':')[1]]",
+                    "sku": "[split(parameters('linuxOsType'), ':')[2]]",
+                    "version": "latest"
+                },
+                "disk": {
+                    "name": "[concat(variables('namespace'), 'jumpbox', 'osdisk')]",
+                    "type": "Standard_LRS"
+                }
+            },
+            "ip": {
+                "name": "[concat(variables('namespace'), '-jumpboxip-', uniqueString(resourceGroup().id))]"
+            },
+            "subnet": {
+                "name": "jumpboxsubnet",
+                "prefix": "10.0.18.0/24"
+            },
+            "nics": {
+                "public": "[concat(variables('namespace'), 'jumpbox', 'nic', 'public')]"
+            }
+        }
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Network/networkSecurityGroups",
+            "apiVersion": "2018-08-01",
+            "name": "[variables('appSubnet').nsg.name]",
+            "location": "[parameters('location')]",
+            "tags": "[variables('tags')]",
+            "dependsOn": [
+                "[concat('Microsoft.Network/publicIPAddresses', '/', variables('jumpbox').ip.name)]"
+            ],
+            "properties": {
+                "securityRules": [
+                    {
+                        "name": "allow_http",
+                        "properties": {
+                            "description": "Allow http traffic.",
+                            "protocol": "Tcp",
+                            "sourcePortRange": "*",
+                            "destinationPortRange": "8080",
+                            "sourceAddressPrefix": "*",
+                            "destinationAddressPrefix": "*",
+                            "access": "Allow",
+                            "priority": 101,
+                            "direction": "Inbound"
+                        }
+                    },
+                    {
+                        "name": "allow_ssh_from_jumpbox",
+                        "properties": {
+                            "description": "Allow ssh trafic from single node in internal subnet",
+                            "protocol": "Tcp",
+                            "sourcePortRange": "*",
+                            "sourceAddressPrefix": "[reference(variables('jumpbox').ip.name).ipAddress]",
+                            "destinationPortRange": "22",
+                            "destinationAddressPrefix": "*",
+                            "access": "Allow",
+                            "priority": 102,
+                            "direction": "Inbound"
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.Network/networkSecurityGroups",
+            "apiVersion": "2018-08-01",
+            "name": "[variables('jumpbox').nsg.name]",
+            "location": "[parameters('location')]",
+            "tags": "[variables('tags')]",
+            "dependsOn": [
+                "[concat('Microsoft.Network/publicIPAddresses', '/', variables('jumpbox').ip.name)]"
+            ],
+            "properties": {
+                "securityRules": [
+                    {
+                        "name": "allow_ssh_from_jumpbox",
+                        "properties": {
+                            "description": "Allow ssh trafic to the jumpbox",
+                            "protocol": "Tcp",
+                            "sourcePortRange": "*",
+                            "sourceAddressPrefix": "*",
+                            "destinationPortRange": "22",
+                            "destinationAddressPrefix": "*",
+                            "access": "Allow",
+                            "priority": 102,
+                            "direction": "Inbound"
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.Network/publicIPAddresses",
+            "apiVersion": "2018-08-01",
+            "name": "[variables('jumpbox').ip.name]",
+            "location": "[parameters('location')]",
+            "tags": "[variables('tags')]",
+            "properties": {
+                "publicIPAllocationMethod": "Static",
+                "dnsSettings": {
+                    "domainNameLabel": "[variables('jumpbox').ip.name]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Network/virtualNetworks/subnets",
+            "apiVersion": "2018-08-01",
+            "name": "[concat(variables('vnet').name, '/', variables('gtwySubnet').name)]",
+            "location": "[parameters('location')]",
+            "properties": {
+                "addressPrefix": "[variables('gtwySubnet').prefix]"
+            }
+        },
+        {
+            "type": "Microsoft.Network/virtualNetworks/subnets",
+            "apiVersion": "2018-08-01",
+            "name": "[concat(variables('vnet').name, '/', variables('appSubnet').name)]",
+            "location": "[parameters('location')]",
+            "dependsOn": [
+                "[concat('Microsoft.Network/networkSecurityGroups/', variables('appSubnet').nsg.name)]"
+            ],
+            "properties": {
+                "addressPrefix": "[variables('appSubnet').prefix]",
+                "networkSecurityGroup": {
+                    "id": "[resourceId('Microsoft.Network/networkSecurityGroups', variables('appSubnet').nsg.name)]"
+                },
+                "serviceEndpoints": [
+                    {
+                        "service": "Microsoft.Sql",
+                        "locations": [
+                            "[parameters('location')]"
+                        ]
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.Network/virtualNetworks/subnets",
+            "apiVersion": "2018-08-01",
+            "name": "[concat(variables('vnet').name, '/', variables('jumpbox').subnet.name)]",
+            "location": "[parameters('location')]",
+            "dependsOn": [
+                "[concat('Microsoft.Network/virtualNetworks', '/', variables('vnet').name, '/subnets/', variables('appSubnet').name)]"
+            ],
+            "properties": {
+                "addressPrefix": "[variables('jumpbox').subnet.prefix]",
+                "networkSecurityGroup": {
+                    "id": "[resourceId('Microsoft.Network/networkSecurityGroups', variables('jumpbox').nsg.name)]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Network/networkInterfaces",
+            "apiVersion": "2018-08-01",
+            "name": "[variables('jumpbox').nics.public]",
+            "location": "[parameters('location')]",
+            "tags": "[variables('tags')]",
+            "dependsOn": [
+                "[concat('Microsoft.Network/publicIPAddresses/', variables('jumpbox').ip.name)]",
+                "[concat('Microsoft.Network/virtualNetworks', '/', variables('vnet').name, '/subnets/', variables('jumpbox').subnet.name)]"
+            ],
+            "properties": {
+                "networkSecurityGroup": {
+                    "id": "[resourceId('Microsoft.Network/networkSecurityGroups', variables('jumpbox').nsg.name)]"
+                },
+                "ipConfigurations": [
+                    {
+                        "name": "public-access",
+                        "properties": {
+                            "publicIPAddress": {
+                                "id": "[resourceId('Microsoft.Network/publicIPAddresses/', variables('jumpbox').ip.name)]"
+                            },
+                            "subnet": {
+                                "id": "[concat(resourceId('Microsoft.Network/virtualNetworks', variables('vnet').name), '/subnets/', variables('jumpbox').subnet.name)]"
+                            }
+                        }
+                    }
+                ],
+                "enableIPForwarding": true
+            }
+        },
+        {
+            "type": "Microsoft.Compute/virtualMachines",
+            "apiVersion": "2018-06-01",
+            "name": "[variables('jumpbox').name]",
+            "location": "[parameters('location')]",
+            "tags": "[variables('tags')]",
+            "dependsOn": [
+                "[concat('Microsoft.Network/networkInterfaces/', variables('jumpbox').nics.public)]"
+            ],
+            "properties": {
+                "hardwareProfile": {
+                    "vmSize": "[variables('jumpbox').vm.size]"
+                },
+                "osProfile": {
+                    "computerName": "[variables('jumpbox').ip.name]",
+                    "adminUsername": "[variables('jumpbox').vm.user]",
+                    "linuxConfiguration": {
+                        "disablePasswordAuthentication": true,
+                        "ssh": {
+                            "publicKeys": [
+                                {
+                                    "path": "[concat('/home/', variables('jumpbox').vm.user, '/.ssh/authorized_keys')]",
+                                    "keyData": "[variables('jumpbox').vm.key]"
+                                }
+                            ]
+                        }
+                    }
+                },
+                "storageProfile": {
+                    "imageReference": {
+                        "publisher": "[variables('jumpbox').vm.image.publisher]",
+                        "offer": "[variables('jumpbox').vm.image.offer]",
+                        "sku": "[variables('jumpbox').vm.image.sku]",
+                        "version": "[variables('jumpbox').vm.image.version]"
+                    },
+                    "osDisk": {
+                        "name": "[variables('jumpbox').vm.disk.name]",
+                        "managedDisk": {
+                            "storageAccountType": "[variables('jumpbox').vm.disk.type]"
+                        },
+                        "createOption": "FromImage"
+                    }
+                },
+                "networkProfile": {
+                    "networkInterfaces": [
+                        {
+                            "id": "[resourceId('Microsoft.Network/networkInterfaces/', variables('jumpbox').nics.public)]"
+                        }
+                    ]
+                }
+            }
+        }
+    ],
+    "outputs": {
+        "vnetName": {
+            "type": "string",
+            "value": "[variables('vnet').name]"
+        },
+        "appSubnetName": {
+            "type": "string",
+            "value": "[variables('appSubnet').name]"
+        },
+        "gtwySubnetName": {
+            "type": "string",
+            "value": "[variables('gtwySubnet').name]"
+        },
+        "jumpboxName": {
+            "type": "string",
+            "value": "[variables('jumpbox').name]"
+        },
+        "jumpboxPublicIpAddress": {
+            "type": "string",
+            "value": "[reference(variables('jumpbox').ip.name).ipAddress]"
+        },
+        "jumpboxPublicEndpoint": {
+            "type": "string",
+            "value": "[reference(variables('jumpbox').ip.name).dnsSettings.fqdn]"
+        },
+        "jumpboxDns": {
+            "type": "string",
+            "value": "[variables('jumpbox').ip.name]"
+        },
+        "sshUri": {
+            "type": "string",
+            "value": "[concat('ssh ', variables('jumpbox').vm.user, '@', reference(variables('jumpbox').ip.name).dnsSettings.fqdn)]"
+        }
+    }
+}

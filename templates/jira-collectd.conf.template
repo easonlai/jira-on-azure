@@ -1,0 +1,381 @@
+FQDNLookup true
+BaseDir "/var/lib/collectd"
+PluginDir "/usr/lib/collectd"
+TypesDB "/usr/share/collectd/types.db" 
+Interval 10
+Timeout         2
+ReadThreads     5
+WriteThreads    5
+LoadPlugin logfile
+<Plugin logfile>
+   LogLevel "info"
+   File "/var/log/collectd.log"
+   Timestamp true
+</Plugin>
+LoadPlugin aggregation
+LoadPlugin battery
+LoadPlugin cpu
+LoadPlugin csv
+LoadPlugin df
+LoadPlugin disk
+LoadPlugin entropy
+LoadPlugin interface
+LoadPlugin irq
+LoadPlugin java
+LoadPlugin load
+LoadPlugin memory
+LoadPlugin processes
+LoadPlugin rrdtool
+LoadPlugin swap
+LoadPlugin users
+<Plugin aggregation>
+   <Aggregation>
+      Plugin "cpu"
+      Type "cpu"
+      GroupBy "Host"
+      GroupBy "TypeInstance"
+      CalculateSum true
+      CalculateAverage true
+   </Aggregation>
+</Plugin>
+<Plugin csv>
+   DataDir "/var/lib/collectd/csv"
+   StoreRates false
+</Plugin>
+<Plugin df>
+   # ignore rootfs; else, the root file-system would appear twice, causing
+   # one of the updates to fail and spam the log
+   FSType rootfs
+   # ignore the usual virtual / temporary file-systems
+   FSType sysfs
+   FSType proc
+   FSType devtmpfs
+   FSType devpts
+   FSType tmpfs
+   FSType fusectl
+   FSType cgroup
+   IgnoreSelected true
+</Plugin>
+<Plugin rrdtool>
+   DataDir "/var/lib/collectd/rrd"
+</Plugin>
+<Include "/etc/collectd/collectd.conf.d">
+   Filter "*.conf"
+</Include>
+
+<Plugin java>
+   JVMArg "-verbose:jni"
+   JVMArg "-Djava.class.path=/usr/share/collectd/java/jaxb-api-2.3.1.jar:/usr/share/collectd/java/applicationinsights-collectd-${appinsights.ver}.jar:/usr/share/collectd/java/collectd-api.jar:/usr/share/collectd/java/generic-jmx.jar"
+   
+   # Enabling Application Insights plugin
+   LoadPlugin "com.microsoft.applicationinsights.collectd.ApplicationInsightsWriter"
+   
+   # Configuring Application Insights plugin
+   <Plugin ApplicationInsightsWriter>
+      InstrumentationKey "${appinsights.instrumentation.key}"
+      SDKLogger true
+   </Plugin>
+   
+   LoadPlugin "org.collectd.java.GenericJMX"
+   <Plugin "GenericJMX">
+
+      <MBean "jira/dashboardviewcount">
+            ObjectName "com.atlassian.jira:type=dashboard.view.count"
+            InstancePrefix "jira-dashboard.view.count"
+            <Value>
+                Type "gauge"
+                #InstancePrefix "dashboard.view.count"
+                Attribute "Value"
+            </Value>
+        </MBean>
+
+        <MBean "jira/dbconns">
+            ObjectName "com.atlassian.jira:type=db.conns"
+            InstancePrefix "jira-db.conns"
+        <Value>
+            Type "gauge"
+            #InstancePrefix "invocationcount"
+            Attribute "invocation.count"
+        </Value>
+        </MBean>
+
+        <MBean "jira/dbconnsborrowed">
+            ObjectName "com.atlassian.jira:type=db.conns.borrowed"
+            InstancePrefix "jira-db.conns.borrowed"
+            <Value>
+                Type "gauge"
+                Attribute "Value"
+            </Value>
+        </MBean>
+
+        <MBean "jira/dbconnstimetoborrow">
+            ObjectName "com.atlassian.jira:type=db.conns.time.to.borrow"
+            InstancePrefix "jira-db.conns.time.to.borrow"
+            <Value>
+                Type "gauge"
+                Attribute "Value"
+            </Value>
+        </MBean>
+
+        <MBean "jira/dbreads">
+            ObjectName "com.atlassian.jira:type=db.reads"
+            InstancePrefix "jira-db.reads"
+            <Value>
+                Type "gauge"
+                Attribute "Value"
+            </Value>
+        </MBean>
+
+        <MBean "jira/dbwrites">
+            ObjectName "com.atlassian.jira:type=db.writes"
+            InstancePrefix "jira-db.writes"
+            <Value>
+                Type "gauge"
+                #InstancePrefix "db.writes"
+                Attribute "Value"
+            </Value>
+        </MBean>
+
+        <MBean "jira/entityattachmentstotal">
+            ObjectName "com.atlassian.jira:type=entity.attachments.total"
+            InstancePrefix "jira-entity.attachments.total"
+            <Value>
+                Type "gauge"
+                #InstancePrefix "entity.attachments.total"
+                Attribute "Value"
+            </Value>
+        </MBean>
+
+        <MBean "jira/entitycomponentstotal">
+            ObjectName "com.atlassian.jira:type=entity.components.total"
+            InstancePrefix "jira-entity.components.total"
+            <Value>
+                Type "gauge"
+                #InstancePrefix "entity.components.total"
+                Attribute "Value"
+            </Value>
+        </MBean>
+
+        <MBean "jira/entitycustomfieldstotal">
+            ObjectName "com.atlassian.jira:type=entity.customfields.total"
+            InstancePrefix "jira-entity.customfields.total"
+            <Value>
+                Type "gauge"
+                #InstancePrefix "entity.customfields.total"
+                Attribute "Value"
+            </Value>
+        </MBean>
+
+        <MBean "jira/entityfilterstotal">
+            ObjectName "com.atlassian.jira:type=entity.filters.total"
+            InstancePrefix "jira-entity.filters.total"
+            <Value>
+                Type "gauge"
+                #InstancePrefix "entity.filters.total"
+                Attribute "Value"
+            </Value>
+        </MBean>
+
+        <MBean "jira/entitygroupstotal">
+            ObjectName "com.atlassian.jira:type=entity.groups.total"
+            InstancePrefix "jira-entity.groups.total"
+            <Value>
+                Type "gauge"
+                #InstancePrefix "entity.groups.total"
+                Attribute "Value"
+            </Value>
+        </MBean>
+
+        <MBean "jira/entityissuestotal">
+            ObjectName "com.atlassian.jira:type=entity.issues.total"
+            InstancePrefix "jira-entity.issues.total"
+            <Value>
+                Type "gauge"
+                #InstancePrefix "entity.issues.total"
+                Attribute "Value"
+            </Value>
+        </MBean>
+
+        <MBean "jira/entityuserstotal">
+            ObjectName "com.atlassian.jira:type=entity.users.total"
+            InstancePrefix "jira-entity.users.total"
+            <Value>
+                Type "gauge"
+                #InstancePrefix "entity.users.total"
+                Attribute "Value"
+            </Value>
+        </MBean>
+
+        <MBean "jira/entityversionstotal">
+            ObjectName "com.atlassian.jira:type=entity.versions.total"
+            InstancePrefix "jira-entity.versions.total"
+            <Value>
+                Type "gauge"
+                #InstancePrefix "entity.versions.total"
+                Attribute "Value"
+            </Value>
+        </MBean>
+
+        <MBean "jira/issueassignedcount">
+            ObjectName "com.atlassian.jira:type=issue.assigned.count"
+            InstancePrefix "jira-issue.assigned.count"
+            <Value>
+                Type "gauge"
+                #InstancePrefix "issue.assigned.count"
+                Attribute "Value"
+            </Value>
+        </MBean>
+
+        <MBean "jira/issuecreatedcount">
+            ObjectName "com.atlassian.jira:type=issue.created.count"
+            InstancePrefix "jira-issue.created.count"
+            <Value>
+                Type "gauge"
+                #InstancePrefix "issue.created.count"
+                Attribute "Value"
+            </Value>
+        </MBean>
+
+        <MBean "jira/issuelinkcount">
+            ObjectName "com.atlassian.jira:type=issue.link.count"
+            InstancePrefix "jira-issue.link.count"
+            <Value>
+                Type "gauge"
+                #InstancePrefix "issue.link.count"
+                Attribute "Value"
+            </Value>
+        </MBean>
+
+        <MBean "jira/issuesearchcount">
+            ObjectName "com.atlassian.jira:type=issue.search.count"
+            InstancePrefix "jira-issue.search.count"
+            <Value>
+                Type "gauge"
+                #InstancePrefix "issue.search.count"
+                Attribute "Value"
+            </Value>
+        </MBean>
+
+        <MBean "jira/issueupdatedcount">
+            ObjectName "com.atlassian.jira:type=issue.updated.count"
+            InstancePrefix "jira-issue.updated.count"
+            <Value>
+                Type "gauge"
+                #InstancePrefix "issue.updated.count"
+                Attribute "Value"
+            </Value>
+        </MBean>
+
+        <MBean "jira/issueworkloggedcount">
+            ObjectName "com.atlassian.jira:type=issue.worklogged.count"
+            InstancePrefix "jira-issue.worklogged.count"
+            <Value>
+                Type "gauge"
+                #InstancePrefix "issue.worklogged.count"
+                Attribute "Value"
+            </Value>
+        </MBean>
+
+        <MBean "jira/jiralicense">
+            ObjectName "com.atlassian.jira:type=jira.license"
+            InstancePrefix "jira-jira.license"
+            <Value>
+                Type "gauge"
+                #InstancePrefix "jira.license"
+                Attribute "Value"
+            </Value>
+        </MBean>
+
+        <MBean "jira/quicksearchconcurrentsearch">
+            ObjectName "com.atlassian.jira:type=quicksearch.concurrent.search"
+            InstancePrefix "jira-quicksearch.concurrent.search"
+            <Value>
+                Type "gauge"
+                #InstancePrefix "quicksearch.concurrent.search"
+                Attribute "Value"
+            </Value>
+        </MBean>
+
+        <MBean "jira/webrequests">
+            ObjectName "com.atlassian.jira:type=web.requests"
+            InstancePrefix "jira-web.requests"
+            <Value>
+                Type "gauge"
+                #InstancePrefix "web.requests"
+                Attribute "Value"
+            </Value>
+        </MBean>
+
+        # Apache Tomcat JMX configuration
+        <MBean "catalina/thread_pool">
+            ObjectName "Catalina:type=ThreadPool,*"
+            InstancePrefix "tomcat_req_processor-"
+            InstanceFrom "name"
+            <Value>
+                Type "threads"
+                InstancePrefix "total"
+                #InstanceFrom ""
+                Table false
+                Attribute "currentThreadCount"
+            </Value>
+
+            # Max. threads
+            <Value>
+                Type "threads"
+                InstancePrefix "max"
+                #InstanceFrom ""
+                Table false
+                Attribute "maxThreads"
+            </Value>
+            
+            # Min. spare threads
+            <Value>
+                Type "threads"
+                InstancePrefix "min_spare"
+                #InstanceFrom ""
+                Table false
+                Attribute "minSpareThreads"
+            </Value>
+            
+            # Current busy threads
+            <Value>
+                Type "threads"
+                InstancePrefix "running"
+                #InstanceFrom ""
+                Table false
+                Attribute "currentThreadsBusy"
+            </Value>
+        </MBean>
+
+        <Connection>
+            #Host "localhost"
+            ServiceURL "service:jmx:rmi:///jndi/rmi://localhost:9999/jmxrmi"
+            User "monitorRole"
+                    
+            Collect "catalina/thread_pool"
+            Collect "jira/dashboardviewcount"
+            #Collect "jira/dbconns"
+            Collect "jira/dbconnsborrowed"
+            Collect "jira/dbconnstimetoborrow"
+            #Collect "jira/dbreads"
+            #Collect "jira/dbwrites"
+            Collect "jira/entityattachmentstotal"
+            Collect "jira/entitycomponentstotal"
+            Collect "jira/entitycustomfieldstotal"
+            Collect "jira/entityfilterstotal"
+            Collect "jira/entitygroupstotal"
+            Collect "jira/entityissuestotal"
+            Collect "jira/entityuserstotal"
+            Collect "jira/entityversionstotal"
+            Collect "jira/issueassignedcount"
+            Collect "jira/issuecreatedcount"
+            Collect "jira/issuelinkcount"
+            Collect "jira/issuesearchcount"
+            Collect "jira/issueupdatedcount"
+            Collect "jira/issueworkloggedcount"
+            #Collect "jira/jiralicense"
+            Collect "jira/quicksearchconcurrentsearch"
+            #Collect "jira/webrequests"
+      </Connection>
+   </Plugin>
+</Plugin>

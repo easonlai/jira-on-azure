@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--suppress ALL -->
+
+<Server port="8005" shutdown="SHUTDOWN">
+
+  <Listener className="org.apache.catalina.startup.VersionLoggerListener" />
+  <Listener className="org.apache.catalina.core.AprLifecycleListener" SSLEngine="on" />
+  <Listener className="org.apache.catalina.core.JreMemoryLeakPreventionListener" />
+  <Listener className="org.apache.catalina.mbeans.GlobalResourcesLifecycleListener" />
+  <Listener className="org.apache.catalina.core.ThreadLocalLeakPreventionListener" />
+
+  <Service name="Catalina">
+
+    <Connector port="${server.app.port}"
+               relaxedPathChars='[]|'
+               relaxedQueryChars='[]|{}^&#x5c;&#x60;&quot;&lt;&gt;'
+               maxThreads="150"
+               minSpareThreads="25"
+               connectionTimeout="20000"
+               enableLookups="false"
+               maxHttpHeaderSize="8192"
+               protocol="HTTP/1.1"
+               useBodyEncodingForURI="true"
+               redirectPort="8443"
+               acceptCount="100"
+               disableUploadTimeout="true"
+               proxyName="${server.proxy.name}"
+               proxyPort="${server.proxy.port}"
+               scheme="${server.app.scheme}"
+               secure="${server.secure.flag}"/>
+
+    <Engine name="Catalina"
+            defaultHost="localhost"
+            jvmRoute = "${server.cluster.name}">
+
+      <Host name="localhost" appBase="webapps" unpackWARs="true" autoDeploy="true">
+
+        <Context path=""
+                 docBase="${catalina.home}/atlassian-jira"
+                 reloadable="false"
+                 useHttpOnly="true">
+
+          <Resource name="UserTransaction"
+                    auth="Container"
+                    type="javax.transaction.UserTransaction"
+                    factory="org.objectweb.jotm.UserTransactionFactory"
+                    jotm.timeout="60"/>
+
+          <Manager pathname=""/>
+
+        </Context>
+
+      </Host>
+
+      <Valve className="org.apache.catalina.valves.AccessLogValve"
+             pattern="%a %{jira.request.id}r %{jira.request.username}r %t &quot;%m %U%q %H&quot; %s %b %D &quot;%{Referer}i&quot; &quot;%{User-Agent}i&quot; &quot;%{jira.request.assession.id}r&quot;"/>
+
+    </Engine>
+
+  </Service>
+
+</Server>

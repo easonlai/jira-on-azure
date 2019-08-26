@@ -1,0 +1,256 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": {
+      "type": "string"
+    },
+    "dbServerName": {
+      "type": "string",
+      "metadata": {
+        "description": "The database server name."
+      }
+    },
+    "dbDatabaseName": {
+      "type": "string",
+      "metadata": {
+        "description": "The name of the Jira database."
+      }
+    },
+    "dbUsername": {
+      "type": "string",
+      "metadata": {
+        "description": "The username for the dedicated database user."
+      }
+    },
+    "dbPassword": {
+      "type": "securestring",
+      "minLength": 8,
+      "metadata": {
+        "description": "The password for the dedicated database user."
+      }
+    },
+    "postgresDbSku": {
+      "type": "string",
+      "defaultValue": "GP_Gen5_4",
+      "allowedValues": [
+        "GP_Gen5_2",
+        "GP_Gen5_4",
+        "GP_Gen5_8",
+        "GP_Gen5_16",
+        "GP_Gen5_32",
+        "MO_Gen5_2",
+        "MO_Gen5_4",
+        "MO_Gen5_8",
+        "MO_Gen5_16",
+        "MO_Gen5_32"
+      ],
+      "metadata": {
+        "description": "The SKU (stock keeping unit) name of the PostgresSQL instance. Follows the convention {pricing tier}{compute generation}{vCores} eg General Purpose, Generation 5, 4 cores is GP_Gen5_4."
+      }
+    },
+    "postgresDbStorage": {
+      "type": "int",
+      "defaultValue": 102400,
+      "minValue": 102400,
+      "maxValue": 4194304,
+      "metadata": {
+        "description": "The storage size of the PostgresSQL instance in MB."
+      }
+    },
+    "vnetName": {
+      "type": "string",
+      "metadata": {
+        "description": "The name of the Jira virtual network."
+      }
+    },
+    "appSubnetName": {
+      "type": "string",
+      "metadata": {
+        "description": "The name of the subnet within the Jira virtual network where the Jira cluster is located."
+      }
+    },
+    "clusterDbAccessNetworkRule": {
+      "type": "string",
+      "defaultValue": "allowClusterDbAccess",
+      "metadata": {
+        "description": "The name of the network rule that enables the Jira cluster to access the database."
+      }
+    },
+    "jumpboxPublicIpAddress": {
+      "type": "string",
+      "metadata": {
+        "description": "The public IP address of the Jumpbox."
+      }
+    },
+    "workspaceName": {
+      "type": "string",
+      "metadata": {
+        "description": "The name of the Azure Operations Management Suite (OMS) workspace."
+      }
+    },
+    "enableAnalytics": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Enable Azure Operational Insights. Note that an Azure Operations Management Suite (OMS) workspace must first exist."
+      }
+    }
+  },
+  "variables": {
+    "postgresql": {
+      "server": {
+        "name": "[parameters('dbServerName')]",
+        "username": "[parameters('dbUsername')]",
+        "password": "[parameters('dbPassword')]"
+      },
+      "database": {
+        "name": "[toLower(parameters('dbDatabaseName'))]",
+        "tier": "[if(startsWith(parameters('postgresDbSku'), 'MO'), 'MemoryOptimized', 'GeneralPurpose')]",
+        "skuName": "[parameters('postgresDbSku')]",
+        "family": "[split(parameters('postgresDbSku'),'_')[1]]",
+        "capacity": "[split(parameters('postgresDbSku'),'_')[2]]",
+        "storage": "[parameters('postgresDbStorage')]",
+        "backupRetentionPeriod": 7,
+        "geoRedundantBackup": "Enabled",
+        "charset": "UTF8",
+        "collation": "English_United States.1252"
+      }
+    },
+    "retentionInDays": 7
+  },
+  "resources": [
+    {
+      "name": "[variables('postgresql').server.name]",
+      "type": "Microsoft.DBforPostgreSQL/servers",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "[variables('postgresql').database.skuName]",
+        "tier": "[variables('postgresql').database.tier]",
+        "family": "[variables('postgresql').database.family]",
+        "capacity": "[variables('postgresql').database.capacity]"
+      },
+      "apiVersion": "2017-12-01-preview",
+      "properties": {
+        "storageProfile": {
+          "storageMB": "[variables('postgresql').database.storage]",
+          "backupRetentionDays": "[variables('postgresql').database.backupRetentionPeriod]",
+          "geoRedundantBackup": "[variables('postgresql').database.geoRedundantBackup]"
+        },
+        "administratorLogin": "[variables('postgresql').server.username]",
+        "administratorLoginPassword": "[variables('postgresql').server.password]",
+        "version": "9.6",
+        "sslEnforcement": "Enabled"
+      },
+      "resources": [
+        {
+          "type": "providers/diagnosticSettings",
+          "name": "Microsoft.Insights/PostgresDiagnostics",
+          "condition": "[parameters('enableAnalytics')]",
+          "apiVersion": "2017-05-01-preview",
+          "dependsOn": [
+            "[resourceId('Microsoft.DBforPostgreSQL/servers', parameters('dbServerName'))]"
+          ],
+          "properties": {
+            "name": "postgresSaveToWorkspace",
+            "workspaceId": "[resourceId('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]",
+            "logs": [
+              {
+                "category": "PostgreSQLLogs",
+                "enabled": true,
+                "retentionPolicy": {
+                  "days": "[variables('retentionInDays')]",
+                  "enabled": false
+                }
+              }
+            ],
+            "metrics": [
+              {
+                "category": "AllMetrics",
+                "enabled": true,
+                "retentionPolicy": {
+                  "enabled": false,
+                  "days": "[variables('retentionInDays')]"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "type": "Microsoft.DBforPostgreSQL/servers/configurations",
+      "name": "[concat(parameters('dbServerName'), '/', 'pg_qs.query_capture_mode')]",
+      "apiVersion": "2017-12-01-preview",
+      "scale": null,
+      "properties": {
+        "value": "ALL",
+        "source": "user-override"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.DBforPostgreSQL/servers', parameters('dbServerName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.DBforPostgreSQL/servers/configurations",
+      "name": "[concat(parameters('dbServerName'), '/', 'pgms_wait_sampling.query_capture_mode')]",
+      "apiVersion": "2017-12-01-preview",
+      "scale": null,
+      "properties": {
+        "value": "ALL",
+        "source": "user-override"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.DBforPostgreSQL/servers', parameters('dbServerName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.DBforPostgreSQL/servers/databases",
+      "name": "[concat(variables('postgresql').server.name, '/',variables('postgresql').database.name)]",
+      "apiVersion": "2017-12-01-preview",
+      "scale": null,
+      "properties": {
+        "charset": "[variables('postgresql').database.charset]",
+        "collation": "[variables('postgresql').database.collation]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.DBforPostgreSQL/servers', parameters('dbServerName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.DBforPostgreSQL/servers/virtualNetworkRules",
+      "name": "[concat(parameters('dbServerName'), '/', parameters('clusterDbAccessNetworkRule'))]",
+      "apiVersion": "2017-12-01",
+      "scale": null,
+      "properties": {
+        "virtualNetworkSubnetId": "[concat(resourceId('Microsoft.Network/virtualNetworks', parameters('vnetName')), '/subnets/', parameters('appSubnetName'))]",
+        "ignoreMissingVnetServiceEndpoint": false
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.DBforPostgreSQL/servers', parameters('dbServerName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.DBforPostgreSQL/servers/firewallRules",
+      "name": "[concat(parameters('dbServerName'), '/', 'AllowAccessToSetupVMPublicIP')]",
+      "apiVersion": "2017-12-01-preview",
+      "properties": {
+        "startIpAddress": "[parameters('jumpboxPublicIpAddress')]",
+        "endIpAddress": "[parameters('jumpboxPublicIpAddress')]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.DBforPostgreSQL/servers', parameters('dbServerName'))]"
+      ]
+    }
+  ],
+  "outputs": {
+    "serverName": {
+      "type": "string",
+      "value": "[reference(variables('postgresql').server.name).fullyQualifiedDomainName]"
+    },
+    "jdbcUrl": {
+      "type": "string",
+      "value": "[concat('jdbc:postgresql://', reference(variables('postgresql').server.name).fullyQualifiedDomainName, ':5432;/', variables('postgresql').database.name, '?user=', variables('postgresql').server.username, '@', variables('postgresql').server.name, '?password=', variables('postgresql').server.password, '?ssl=true')]"
+    }
+  }
+}

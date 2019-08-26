@@ -1,0 +1,559 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "location": {
+            "type": "string",
+            "metadata": {
+                "description": "The region where Azure will house the deployment."
+            },
+            "minLength": 5
+        },
+        "jiraAdminUserEmail": {
+            "type": "string",
+            "metadata": {
+                "description": "The email address of the Jira administrator user."
+            }
+        },
+        "gtwyName": {
+            "type": "string",
+            "metadata": {
+                "description": "The name of the Application Gateway."
+            }
+        },
+        "storageAccountName": {
+            "type": "string",
+            "metadata": {
+                "description": "The name of the storage account."
+            }
+        },
+        "clusterName": {
+            "type": "string",
+            "metadata": {
+                "description": "The name of the Jira cluster."
+            }
+        },
+        "appInsightsName": {
+            "type": "string",
+            "metadata": {
+                "description": "The name of the Application Insights resource."
+            }
+        },
+        "statusCheckUrl": {
+            "type": "string",
+            "metadata": {
+                "description": "The Jira status check URL."
+            }
+        },
+        "dbType": {
+            "type": "string",
+            "allowedValues": [
+                "sqlserver",
+                "postgres",
+                "mysql"
+            ],
+            "defaultValue": "sqlserver",
+            "metadata": {
+                "description": "The database type."
+            }
+        },
+        "isDbVCoreModel": {
+            "type": "bool"
+        },
+        "dbDatabaseServerName": {
+            "type": "string",
+            "metadata": {
+                "description": "The database server name."
+            }
+        },
+        "dbDatabaseName": {
+            "type": "string",
+            "metadata": {
+                "description": "The Jira database name."
+            }
+        }
+    },
+    "variables": {
+        "namespace": "jira",
+        "supportTeam": {
+            "name": "[concat(variables('namespace'), '-SupportTeam-', uniqueString(resourceGroup().id))]",
+            "shortName": "[toUpper(concat(variables('namespace'), 'SupTeam'))]"
+        },
+        "alerts": {
+            "jiraNodeOffline": {
+                "name": "[concat(variables('namespace'), '-AlertClusterNodeOffline-', uniqueString(resourceGroup().id))]"
+            },
+            "jiraSanSize": {
+                "name": "[concat(variables('namespace'), '-AlertSharedStorageSize-', uniqueString(resourceGroup().id))]"
+            },
+            "jiraClusterNodeCPU": {
+                "name": "[concat(variables('namespace'), '-AlertClusterNodeHighCpuUsage-', uniqueString(resourceGroup().id))]"
+            },
+            "dbCpuPercentage": {
+                "name": "[concat(variables('namespace'), '-AlertDbCpuPercentage-', uniqueString(resourceGroup().id))]",
+                "description": "Monitors DB CPU Utilisation"
+            },
+            "dbDtuPercentage": {
+                "name": "[concat(variables('namespace'), '-AlertDbDtuPercentage-', uniqueString(resourceGroup().id))]",
+                "description": "Monitors DB DTU Utilisation"
+            },
+            "dbSizePercentage": {
+                "name": "[concat(variables('namespace'), '-AlertDbSizePercentage-', uniqueString(resourceGroup().id))]",
+                "description": "Monitors DB Storage Utilisation"
+            },
+            "dbIoConsumptionPercentage": {
+                "name": "[concat(variables('namespace'), '-AlertDbIoConsumptionPercentage-', uniqueString(resourceGroup().id))]",
+                "description": "Monitors DB IO Consumption"
+            }
+        },
+        "webTestName": "[toLower(concat('AppHeartBeat-', parameters('appInsightsName')))]",
+        "webTestAlertName": "[concat(variables('webTestName'), guid(resourceGroup().id))]",
+        "webTest": "[concat('<WebTest Name=\"AppHeartBeat\" Id=\"', guid(resourceGroup().id), '\" Enabled=\"True\" CssProjectStructure=\"\" CssIteration=\"\" Timeout=\"120\" WorkItemIds=\"\" xmlns=\"http://microsoft.com/schemas/VisualStudio/TeamTest/2010\" Description=\"\" CredentialUserName=\"\" CredentialPassword=\"\" PreAuthenticate=\"True\" Proxy=\"default\" StopOnError=\"False\" RecordedResultFile=\"\" ResultsLocale=\"\"> <Items><Request Method=\"GET\" Guid=\"a07aa756-7c4b-c73e-876f-d7edcc469051\" Version=\"1.1\" Url=\"', parameters('statusCheckUrl') ,'\" ThinkTime=\"0\" Timeout=\"120\" ParseDependentRequests=\"False\" FollowRedirects=\"True\" RecordResult=\"True\" Cache=\"False\" ResponseTimeGoal=\"0\" Encoding=\"utf-8\" ExpectedHttpStatusCode=\"200\" ExpectedResponseUrl=\"\" ReportingName=\"\" IgnoreHttpStatusCode=\"False\" /></Items><ValidationRules><ValidationRule Classname=\"Microsoft.VisualStudio.TestTools.WebTesting.Rules.ValidationRuleFindText, Microsoft.VisualStudio.QualityTools.WebTestFramework, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a\" DisplayName=\"Find Text\" Description=\"Verifies the existence of the specified text in the response.\" Level=\"High\" ExectuionOrder=\"BeforeDependents\"><RuleParameters><RuleParameter Name=\"FindText\" Value=\"&#x7B;&#x22;state&#x22;&#x3A;&#x22;RUNNING&#x22;&#x7D;\" /><RuleParameter Name=\"IgnoreCase\" Value=\"False\" /><RuleParameter Name=\"UseRegularExpression\" Value=\"False\" /><RuleParameter Name=\"PassIfTextFound\" Value=\"True\" /></RuleParameters></ValidationRule></ValidationRules> </WebTest>')]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Insights/actionGroups",
+            "name": "[variables('supportTeam').name]",
+            "apiVersion": "2018-03-01",
+            "location": "Global",
+            "properties": {
+                "groupShortName": "[variables('supportTeam').shortName]",
+                "enabled": true,
+                "emailReceivers": [
+                    {
+                        "name": "JiraEmailAction_-EmailAction-",
+                        "emailAddress": "[parameters('jiraAdminUserEmail')]"
+                    }
+                ],
+                "smsReceivers": [],
+                "webhookReceivers": [],
+                "itsmReceivers": [],
+                "azureAppPushReceivers": [],
+                "automationRunbookReceivers": [],
+                "voiceReceivers": [],
+                "logicAppReceivers": [],
+                "azureFunctionReceivers": []
+            }
+        },
+        {
+            "type": "Microsoft.Insights/metricAlerts",
+            "name": "[variables('alerts').jiraNodeOffline.name]",
+            "apiVersion": "2018-03-01",
+            "location": "global",
+            "tags": {},
+            "scale": null,
+            "properties": {
+                "description": "A Jira node has just became unhealthly/gone offline. ",
+                "enabled": true,
+                "severity": 1,
+                "windowSize": "PT5M",
+                "evaluationFrequency": "PT1M",
+                "templateType": "8",
+                "templateSpecificParameters": {},
+                "scopes": [
+                    "[resourceId('Microsoft.Network/applicationGateways/', parameters('gtwyName'))]"
+                ],
+                "criteria": {
+                    "allOf": [
+                        {
+                            "metricName": "UnhealthyHostCount",
+                            "metricNamespace": "Microsoft.Network/applicationGateways",
+                            "operator": "GreaterThan",
+                            "threshold": 0,
+                            "timeAggregation": "Average",
+                            "name": "Metric1",
+                            "dimensions": [],
+                            "monitorTemplateType": "8"
+                        }
+                    ],
+                    "odata.type": "Microsoft.Azure.Monitor.SingleResourceMultipleMetricCriteria"
+                },
+                "actions": [
+                    {
+                        "actionGroupId": "[resourceId('Microsoft.Insights/actionGroups', variables('supportTeam').name)]",
+                        "webHookProperties": {}
+                    }
+                ]
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Insights/actionGroups', variables('supportTeam').name)]"
+            ]
+        },
+        {
+            "type": "Microsoft.Insights/metricAlerts",
+            "name": "[variables('alerts').jiraSanSize.name]",
+            "apiVersion": "2018-03-01",
+            "location": "Global",
+            "properties": {
+                "description": "SAN Size Over 4TB",
+                "enabled": true,
+                "severity": 3,
+                "windowSize": "PT1H",
+                "evaluationFrequency": "PT1M",
+                "templateType": "8",
+                "templateSpecificParameters": {},
+                "scopes": [
+                    "[resourceId('Microsoft.Storage/storageAccounts/fileServices', parameters('storageAccountName'), 'default')]"
+                ],
+                "criteria": {
+                    "allOf": [
+                        {
+                            "metricName": "FileCapacity",
+                            "metricNamespace": "Microsoft.Storage/storageAccounts/fileServices",
+                            "operator": "GreaterThan",
+                            "threshold": 4000000000000,
+                            "timeAggregation": "Average",
+                            "name": "Metric1",
+                            "dimensions": [],
+                            "monitorTemplateType": "8"
+                        }
+                    ],
+                    "odata.type": "Microsoft.Azure.Monitor.SingleResourceMultipleMetricCriteria"
+                },
+                "actions": [
+                    {
+                        "actionGroupId": "[resourceId('Microsoft.Insights/actionGroups', variables('supportTeam').name)]",
+                        "webHookProperties": {}
+                    }
+                ]
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Insights/actionGroups', variables('supportTeam').name)]"
+            ]
+        },
+        {
+            "type": "Microsoft.Insights/metricAlerts",
+            "name": "[variables('alerts').jiraClusterNodeCPU.name]",
+            "apiVersion": "2018-03-01",
+            "location": "Global",
+            "properties": {
+                "description": "A Jira node is running hot.",
+                "enabled": true,
+                "severity": 3,
+                "windowSize": "PT5M",
+                "evaluationFrequency": "PT1M",
+                "templateType": "8",
+                "templateSpecificParameters": {},
+                "scopes": [
+                    "[resourceId('Microsoft.Compute/virtualMachineScaleSets', parameters('clusterName'))]"
+                ],
+                "criteria": {
+                    "allOf": [
+                        {
+                            "metricName": "Percentage CPU",
+                            "metricNamespace": "Microsoft.Compute/virtualMachineScaleSets",
+                            "operator": "GreaterThan",
+                            "threshold": 80,
+                            "timeAggregation": "Average",
+                            "name": "Metric1",
+                            "dimensions": [
+                                {
+                                    "name": "VMName",
+                                    "operator": "Include",
+                                    "values": [
+                                        "*"
+                                    ]
+                                }
+                            ],
+                            "monitorTemplateType": "8"
+                        }
+                    ],
+                    "odata.type": "Microsoft.Azure.Monitor.SingleResourceMultipleMetricCriteria"
+                },
+                "actions": [
+                    {
+                        "actionGroupId": "[resourceId('Microsoft.Insights/actionGroups', variables('supportTeam').name)]",
+                        "webHookProperties": {}
+                    }
+                ]
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Insights/actionGroups', variables('supportTeam').name)]"
+            ]
+        },
+        {
+            "type": "Microsoft.Insights/webtests",
+            "name": "[variables('webTestName')]",
+            "apiVersion": "2015-05-01",
+            "location": "[parameters('location')]",
+            "condition": "[not(empty(parameters('appInsightsName')))]",
+            "tags": {
+                "[concat('hidden-link:', resourceId('microsoft.insights/components/', parameters('appInsightsName')))]": "Resource"
+            },
+            "properties": {
+                "SyntheticMonitorId": "[variables('webTestName')]",
+                "Name": "AppHeartBeat",
+                "Description": "",
+                "Enabled": true,
+                "Frequency": 300,
+                "Timeout": 120,
+                "Kind": "ping",
+                "RetryEnabled": true,
+                "Locations": [
+                    {
+                        "Id": "us-ca-sjc-azr"
+                    },
+                    {
+                        "Id": "us-tx-sn1-azr"
+                    },
+                    {
+                        "Id": "us-il-ch1-azr"
+                    },
+                    {
+                        "Id": "us-va-ash-azr"
+                    },
+                    {
+                        "Id": "us-fl-mia-edge"
+                    }
+                ],
+                "Configuration": {
+                    "WebTest": "[variables('webTest')]"
+                }
+            }
+        },
+        {
+            "type": "microsoft.insights/alertrules",
+            "name": "[variables('webTestAlertName')]",
+            "apiVersion": "2016-03-01",
+            "location": "[parameters('location')]",
+            "condition": "[not(empty(parameters('appInsightsName')))]",
+            "properties": {
+                "name": "[variables('webTestAlertName')]",
+                "description": "",
+                "isEnabled": true,
+                "condition": {
+                    "odata.type": "Microsoft.Azure.Management.Insights.Models.LocationThresholdRuleCondition",
+                    "dataSource": {
+                        "odata.type": "Microsoft.Azure.Management.Insights.Models.RuleMetricDataSource",
+                        "resourceUri": "[resourceId('microsoft.insights/webtests', variables('webTestName'))]",
+                        "metricName": "GSMT_AvRaW"
+                    },
+                    "windowSize": "PT5M",
+                    "failedLocationCount": 3
+                },
+                "action": {
+                    "odata.type": "Microsoft.Azure.Management.Insights.Models.RuleEmailAction",
+                    "sendToServiceOwners": false,
+                    "customEmails": []
+                }
+            },
+            "dependsOn": [
+                "[resourceId('microsoft.insights/webtests', variables('webTestName'))]"
+            ]
+        },
+        {
+            "type": "microsoft.insights/alertrules",
+            "name": "[variables('alerts').dbCpuPercentage.name]",
+            "apiVersion": "2016-03-01",
+            "location": "[parameters('location')]",
+            "condition": "[and(not(empty(parameters('appInsightsName'))), equals(parameters('dbType'), 'sqlserver'))]",
+            "properties": {
+                "name": "[variables('alerts').dbCpuPercentage.name]",
+                "description": "[variables('alerts').dbCpuPercentage.description]",
+                "isEnabled": true,
+                "condition": {
+                    "odata.type": "Microsoft.Azure.Management.Insights.Models.ThresholdRuleCondition",
+                    "dataSource": {
+                        "odata.type": "Microsoft.Azure.Management.Insights.Models.RuleMetricDataSource",
+                        "resourceUri": "[resourceId('Microsoft.Sql/servers/databases', parameters('dbDatabaseServerName'), parameters('dbDatabaseName'))]",
+                        "metricName": "cpu_percent"
+                    },
+                    "operator": "GreaterThan",
+                    "threshold": 80,
+                    "windowSize": "PT5M"
+                },
+                "actions": [
+                    {
+                        "odata.type": "Microsoft.Azure.Management.Insights.Models.RuleEmailAction",
+                        "sendToServiceOwners": false,
+                        "customEmails": [
+                            "[parameters('jiraAdminUserEmail')]"
+                        ]
+                    }
+                ]
+            }
+        },
+        {
+            "type": "microsoft.insights/alertrules",
+            "name": "[variables('alerts').dbDtuPercentage.name]",
+            "apiVersion": "2016-03-01",
+            "location": "[parameters('location')]",
+            "condition": "[and(and(not(empty(parameters('appInsightsName'))), equals(parameters('dbType'), 'sqlserver')), not(parameters('isDbVCoreModel')))]",
+            "properties": {
+                "name": "[variables('alerts').dbDtuPercentage.name]",
+                "description": "[variables('alerts').dbDtuPercentage.description]",
+                "isEnabled": true,
+                "condition": {
+                    "odata.type": "Microsoft.Azure.Management.Insights.Models.ThresholdRuleCondition",
+                    "dataSource": {
+                        "odata.type": "Microsoft.Azure.Management.Insights.Models.RuleMetricDataSource",
+                        "resourceUri": "[resourceId('Microsoft.Sql/servers/databases', parameters('dbDatabaseServerName'), parameters('dbDatabaseName'))]",
+                        "metricName": "dtu_consumption_percent"
+                    },
+                    "operator": "GreaterThan",
+                    "threshold": 80,
+                    "windowSize": "PT5M"
+                },
+                "actions": [
+                    {
+                        "odata.type": "Microsoft.Azure.Management.Insights.Models.RuleEmailAction",
+                        "sendToServiceOwners": false,
+                        "customEmails": [
+                            "[parameters('jiraAdminUserEmail')]"
+                        ]
+                    }
+                ]
+            }
+        },
+        {
+            "type": "microsoft.insights/alertrules",
+            "name": "[variables('alerts').dbSizePercentage.name]",
+            "apiVersion": "2016-03-01",
+            "location": "[parameters('location')]",
+            "condition": "[and(not(empty(parameters('appInsightsName'))), equals(parameters('dbType'), 'sqlserver'))]",
+            "properties": {
+                "name": "[variables('alerts').dbSizePercentage.name]",
+                "description": "[variables('alerts').dbSizePercentage.description]",
+                "isEnabled": true,
+                "condition": {
+                    "odata.type": "Microsoft.Azure.Management.Insights.Models.ThresholdRuleCondition",
+                    "dataSource": {
+                        "odata.type": "Microsoft.Azure.Management.Insights.Models.RuleMetricDataSource",
+                        "resourceUri": "[resourceId('Microsoft.Sql/servers/databases', parameters('dbDatabaseServerName'), parameters('dbDatabaseName'))]",
+                        "metricName": "storage_percent"
+                    },
+                    "operator": "GreaterThan",
+                    "threshold": 80,
+                    "windowSize": "PT5M"
+                },
+                "actions": [
+                    {
+                        "odata.type": "Microsoft.Azure.Management.Insights.Models.RuleEmailAction",
+                        "sendToServiceOwners": false,
+                        "customEmails": [
+                            "[parameters('jiraAdminUserEmail')]"
+                        ]
+                    }
+                ]
+            }
+        },
+        {
+            "type": "microsoft.insights/metricAlerts",
+            "name": "[variables('alerts').dbCpuPercentage.name]",
+            "apiVersion": "2018-03-01",
+            "location": "global",
+            "condition": "[and(not(empty(parameters('appInsightsName'))), equals(parameters('dbType'), 'postgres'))]",
+            "properties": {
+                "name": "[variables('alerts').dbCpuPercentage.name]",
+                "description": "[variables('alerts').dbCpuPercentage.description]",
+                "severity": 1,
+                "enabled": true,
+                "scopes": ["[resourceId('Microsoft.DBforPostgreSQL/servers', parameters('dbDatabaseServerName'))]"
+                ],
+                "evaluationFrequency": "PT1M",
+                "windowSize": "PT5M",
+                "criteria": {
+                    "odata.type": "Microsoft.Azure.Monitor.SingleResourceMultipleMetricCriteria",
+                    "allOf": [
+                        {
+                            "name" : "[variables('alerts').dbCpuPercentage.name]",
+                            "metricName": "cpu_percent",
+                            "dimensions":[],
+                            "operator": "GreaterThan",
+                            "threshold" : "80",
+                            "timeAggregation": "Average"
+                        }
+                    ]
+                },
+                "actions": [
+                    {
+                        "actionGroupId": "[resourceId('microsoft.insights/actionGroups', variables('supportTeam').name)]",
+                        "webHookProperties": {}
+                    }
+                ]
+            },
+            "dependsOn": [
+                "[resourceId('microsoft.insights/actionGroups', variables('supportTeam').name)]"
+            ]
+        },
+        {
+            "type": "microsoft.insights/metricAlerts",
+            "name": "[variables('alerts').dbIoConsumptionPercentage.name]",
+            "apiVersion": "2018-03-01",
+            "location": "global",
+            "condition": "[and(not(empty(parameters('appInsightsName'))), equals(parameters('dbType'), 'postgres'))]",
+            "properties": {
+                "name": "[variables('alerts').dbIoConsumptionPercentage.name]",
+                "description": "[variables('alerts').dbIoConsumptionPercentage.description]",
+                "severity": 1,
+                "enabled": true,
+                "scopes": ["[resourceId('Microsoft.DBforPostgreSQL/servers', parameters('dbDatabaseServerName'))]"
+                ],
+                "evaluationFrequency": "PT1M",
+                "windowSize": "PT5M",
+                "criteria": {
+                    "odata.type": "Microsoft.Azure.Monitor.SingleResourceMultipleMetricCriteria",
+                    "allOf": [
+                        {
+                            "name" : "[variables('alerts').dbIoConsumptionPercentage.name]",
+                            "metricName": "io_consumption_percent",
+                            "dimensions":[],
+                            "operator": "GreaterThan",
+                            "threshold" : "80",
+                            "timeAggregation": "Average"
+                        }
+                    ]
+                },
+                "actions": [
+                    {
+                        "actionGroupId": "[resourceId('microsoft.insights/actionGroups', variables('supportTeam').name)]",
+                        "webHookProperties": {}
+                    }
+                ]
+            },
+            "dependsOn": [
+                "[resourceId('microsoft.insights/actionGroups', variables('supportTeam').name)]"
+            ]
+        },
+        {
+            "type": "microsoft.insights/metricAlerts",
+            "name": "[variables('alerts').dbSizePercentage.name]",
+            "apiVersion": "2018-03-01",
+            "location": "global",
+            "condition": "[and(not(empty(parameters('appInsightsName'))), equals(parameters('dbType'), 'postgres'))]",
+            "properties": {
+                "name": "[variables('alerts').dbSizePercentage.name]",
+                "description": "[variables('alerts').dbSizePercentage.description]",
+                "severity": 1,
+                "enabled": true,
+                "scopes": ["[resourceId('Microsoft.DBforPostgreSQL/servers', parameters('dbDatabaseServerName'))]"
+                ],
+                "evaluationFrequency": "PT1M",
+                "windowSize": "PT5M",
+                "criteria": {
+                    "odata.type": "Microsoft.Azure.Monitor.SingleResourceMultipleMetricCriteria",
+                    "allOf": [
+                        {
+                            "name" : "[variables('alerts').dbSizePercentage.name]",
+                            "metricName": "storage_percent",
+                            "dimensions":[],
+                            "operator": "GreaterThan",
+                            "threshold" : "80",
+                            "timeAggregation": "Average"
+                        }
+                    ]
+                },
+                "actions": [
+                    {
+                        "actionGroupId": "[resourceId('microsoft.insights/actionGroups', variables('supportTeam').name)]",
+                        "webHookProperties": {}
+                    }
+                ]
+            },
+            "dependsOn": [
+                "[resourceId('microsoft.insights/actionGroups', variables('supportTeam').name)]"
+            ]
+        }
+    ],
+    "outputs": {}
+}

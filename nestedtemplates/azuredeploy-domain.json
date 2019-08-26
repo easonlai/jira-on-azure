@@ -1,0 +1,60 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "cname": {
+            "type": "string",
+            "metadata": {
+                "description": "This is the  Canonical Name record (CNAME) for your organization. If you don't provide one, Azure will generate a random sub domain for your instance."
+            },
+            "minLength": 1
+        },
+        "gtwyIpName": {
+            "type": "string",
+            "metadata": {
+                "description": "The name of the Application Gateway's public IP to use."
+            },
+            "minLength": 1
+        },
+        "prefix": {
+            "type": "string",
+            "defaultValue": "jira",
+            "metadata": {
+                "description": "The Domain Prefix to use eg <prefix>.<cname>"
+            },
+            "minLength": 1
+        }
+    },
+    "variables": {},
+    "resources": [
+        {
+            "type": "Microsoft.Network/dnszones",
+            "name": "[parameters('cname')]",
+            "apiVersion": "2018-05-01",
+            "location": "global",
+            "properties": {}
+        },
+        {
+            "type": "Microsoft.Network/dnszones/A",
+            "name": "[concat(parameters('cname'), '/', parameters('prefix'))]",
+            "apiVersion": "2018-05-01",
+            "scale": null,
+            "properties": {
+                "TTL": 3600,
+                "targetResource": {
+                    "id": "[resourceId('Microsoft.Network/publicIPAddresses', parameters('gtwyIpName'))]"
+                }
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Network/dnszones', parameters('cname'))]"
+            ],
+            "condition": "[greater(length(parameters('cname')), 0)]"
+        }
+    ],
+    "outputs": {
+        "alias": {
+            "type": "string",
+            "value": "[concat(parameters('prefix'), '.', parameters('cname'))]"
+        }
+    }
+}

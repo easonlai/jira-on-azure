@@ -1,0 +1,365 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "location": {
+            "type": "string",
+            "metadata": {
+                "description": "The region where Azure will house the deployment."
+            },
+            "minLength": 5
+        },
+        "dbServerName": {
+            "type": "string",
+            "metadata": {
+                "description": "The database server name."
+            }
+        },
+        "dbDatabaseName": {
+            "type": "string",
+            "metadata": {
+                "description": "The name of the database."
+            }
+        },
+        "dbUsername": {
+            "type": "string",
+            "metadata": {
+                "description": "The username for the dedicated database user."
+            }
+        },
+        "dbPassword": {
+            "type": "securestring",
+            "minLength": 8,
+            "metadata": {
+                "description": "The password for the dedicated database user."
+            }
+        },
+        "dbTier": {
+            "type": "string",
+            "allowedValues": [
+                "Basic",
+                "Standard",
+                "Premium",
+                "GeneralPurpose",
+                "BusinessCritical"
+            ],
+            "defaultValue": "Standard",
+            "metadata": {
+                "description": "The database service tier."
+            }
+        },
+        "dbTierSize": {
+            "type": "string",
+            "allowedValues": [
+                "Basic",
+                "S1",
+                "S2",
+                "S3",
+                "S4",
+                "S6",
+                "S7",
+                "S9",
+                "S12",
+                "P1",
+                "P2",
+                "P4",
+                "P6",
+                "P11",
+                "P15",
+                "GP_Gen4_1",
+                "GP_Gen4_10",
+                "GP_Gen4_16",
+                "GP_Gen4_2",
+                "GP_Gen4_24",
+                "GP_Gen4_3",
+                "GP_Gen4_4",
+                "GP_Gen4_5",
+                "GP_Gen4_6",
+                "GP_Gen4_7",
+                "GP_Gen4_8",
+                "GP_Gen4_9",
+                "GP_Gen5_10",
+                "GP_Gen5_12",
+                "GP_Gen5_14",
+                "GP_Gen5_16",
+                "GP_Gen5_18",
+                "GP_Gen5_2",
+                "GP_Gen5_20",
+                "GP_Gen5_24",
+                "GP_Gen5_32",
+                "GP_Gen5_4",
+                "GP_Gen5_40",
+                "GP_Gen5_6",
+                "GP_Gen5_8",
+                "GP_Gen5_80",
+                "BC_Gen4_1",
+                "BC_Gen4_10",
+                "BC_Gen4_16",
+                "BC_Gen4_2",
+                "BC_Gen4_24",
+                "BC_Gen4_3",
+                "BC_Gen4_4",
+                "BC_Gen4_5",
+                "BC_Gen4_6",
+                "BC_Gen4_7",
+                "BC_Gen4_8",
+                "BC_Gen4_9",
+                "BC_Gen5_10",
+                "BC_Gen5_12",
+                "BC_Gen5_14",
+                "BC_Gen5_16",
+                "BC_Gen5_18",
+                "BC_Gen5_2",
+                "BC_Gen5_20",
+                "BC_Gen5_24",
+                "BC_Gen5_32",
+                "BC_Gen5_4",
+                "BC_Gen5_40",
+                "BC_Gen5_6",
+                "BC_Gen5_8",
+                "BC_Gen5_80"
+            ],
+            "defaultValue": "S2",
+            "metadata": {
+                "description": "The size of the database service tier. Basic, Standard (S1..S12) and Premium (P1..P15) tier sizes are available. Note that if the 'jiraClusterSize' parameter is used this value will be ignored."
+            }
+        },
+        "vnetName": {
+            "type": "string",
+            "metadata": {
+                "description": "The name of the virtual network."
+            }
+        },
+        "appSubnetName": {
+            "type": "string",
+            "metadata": {
+                "description": "The name of the subnet within the virtual network where the VMSS cluster is located."
+            }
+        },
+        "clusterDbAccessNetworkRule": {
+            "type": "string",
+            "defaultValue": "allowClusterDbAccess",
+            "metadata": {
+                "description": "The name of the network rule that enables the VMSS cluster to access the database."
+            }
+        },
+        "jumpboxPublicIpAddress": {
+            "type": "string",
+            "metadata": {
+              "description": "The public IP address of the Jumpbox."
+            }
+        },
+        "workspaceName": {
+            "type": "string",
+            "metadata": {
+                "description": "The name of the Azure Operations Management Suite (OMS) workspace."
+            }
+        },
+        "enableAnalytics": {
+            "type": "bool",
+            "defaultValue": true,
+            "metadata": {
+                "description": "Enable Azure Operational Insights. Note that an Azure Operations Management Suite (OMS) workspace must first exist."
+            }
+        }
+    },
+    "variables": {
+        "sql": {
+            "server": {
+                "name": "[parameters('dbServerName')]",
+                "username": "[parameters('dbUsername')]",
+                "password": "[parameters('dbPassword')]"
+            },
+            "database": {
+                "name": "[parameters('dbDatabaseName')]",
+                "tier": "[parameters('dbTier')]",
+                "tierName": "[parameters('dbTierSize')]",
+                "maxSizeBytes": "[variables('lookup').maxSizeInBytes[string(parameters('dbTier'))]]",
+                "collation": "SQL_Latin1_General_CP437_CI_AI"
+            }
+        },
+        "lookup": {
+            "maxSizeInBytes": {
+                "Basic": 2147483648,
+                "Standard": 268435456000,
+                "Premium": 536870912000,
+                "GeneralPurpose": 1099511627776,
+                "BusinessCritical": 536870912000
+            }
+        },
+        "tags": {
+            "vendor": "Atlassian",
+            "product": "JIRA",
+            "provider": "2F0AF47A-92C7-413A-9009-C3815BFF7AF6"
+        },
+        "retentionInDays": 7
+    },
+    "resources": [
+        {
+            "name": "[variables('sql').server.name]",
+            "type": "Microsoft.Sql/servers",
+            "apiVersion": "2017-03-01-preview",
+            "location": "[parameters('location')]",
+            "properties": {
+                "administratorLogin": "[variables('sql').server.username]",
+                "administratorLoginPassword": "[variables('sql').server.password]"
+            },
+            "tags": "[variables('tags')]",
+            "resources": [
+                {
+                    "type": "databases",
+                    "apiVersion": "2017-10-01-preview",
+                    "name": "[variables('sql').database.name]",
+                    "location": "[parameters('location')]",
+                    "tags": "[variables('tags')]",
+                    "dependsOn": [
+                        "[concat('Microsoft.Sql/servers/', variables('sql').server.name)]"
+                    ],
+                    "sku": {
+                        "name": "[variables('sql').database.tierName]",
+                        "tier": "[parameters('dbTier')]"
+                    },
+                    "properties": {
+                        "collation": "[variables('sql').database.collation]",
+                        "maxSizeBytes": "[variables('sql').database.maxSizeBytes]"
+                    },
+                    "resources": [
+                        {
+                            "comments": "DiagnosticSettings have to be within the nested, nested SQL DB - https://david-obrien.net/2018/06/azure-sql-diagnostics/. NB diagnostic hangs around too ie doesn't get deleted on RG deletion.",
+                            "type": "providers/diagnosticSettings",
+                            "name": "Microsoft.Insights/diagnostic_primary",
+                            "condition": "[parameters('enableAnalytics')]",
+                            "apiVersion": "2017-05-01-preview",
+                            "dependsOn": [
+                                "[resourceId('Microsoft.Sql/servers/databases', variables('sql').server.name, variables('sql').database.name)]"
+                            ],
+                            "properties": {
+                                "name": "sqlSaveToWorkspace",
+                                "workspaceId": "[resourceId('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]",
+                                "logs": [
+                                    {
+                                        "category": "Blocks",
+                                        "enabled": true,
+                                        "retentionPolicy": {
+                                            "days": "[variables('retentionInDays')]",
+                                            "enabled": false
+                                        }
+                                    },
+                                    {
+                                        "category": "QueryStoreWaitStatistics",
+                                        "enabled": true,
+                                        "retentionPolicy": {
+                                            "days": "[variables('retentionInDays')]",
+                                            "enabled": false
+                                        }
+                                    },
+                                    {
+                                        "category": "Errors",
+                                        "enabled": true,
+                                        "retentionPolicy": {
+                                            "days": "[variables('retentionInDays')]",
+                                            "enabled": false
+                                        }
+                                    },
+                                    {
+                                        "category": "QueryStoreRuntimeStatistics",
+                                        "enabled": true,
+                                        "retentionPolicy": {
+                                            "days": "[variables('retentionInDays')]",
+                                            "enabled": false
+                                        }
+                                    },
+                                    {
+                                        "category": "DatabaseWaitStatistics",
+                                        "enabled": true,
+                                        "retentionPolicy": {
+                                            "days": "[variables('retentionInDays')]",
+                                            "enabled": false
+                                        }
+                                    },
+                                    {
+                                        "category": "Timeouts",
+                                        "enabled": true,
+                                        "retentionPolicy": {
+                                            "days": "[variables('retentionInDays')]",
+                                            "enabled": false
+                                        }
+                                    },
+                                    {
+                                        "category": "SQLInsights",
+                                        "enabled": true,
+                                        "retentionPolicy": {
+                                            "days": "[variables('retentionInDays')]",
+                                            "enabled": false
+                                        }
+                                    },
+                                    {
+                                        "category": "AutomaticTuning",
+                                        "enabled": true,
+                                        "retentionPolicy": {
+                                            "days": "[variables('retentionInDays')]",
+                                            "enabled": false
+                                        }
+                                    },
+                                    {
+                                        "category": "Deadlocks",
+                                        "enabled": true,
+                                        "retentionPolicy": {
+                                            "days": "[variables('retentionInDays')]",
+                                            "enabled": false
+                                        }
+                                    }
+                                ],
+                                "metrics": [
+                                    {
+                                        "category": "AllMetrics",
+                                        "enabled": true,
+                                        "retentionPolicy": {
+                                            "enabled": false,
+                                            "days": "[variables('retentionInDays')]"
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "type": "Microsoft.Sql/servers/virtualNetworkRules",
+            "name": "[concat(parameters('dbServerName'), '/', parameters('clusterDbAccessNetworkRule'))]",
+            "apiVersion": "2015-05-01-preview",
+            "properties": {
+                "virtualNetworkSubnetId": "[concat(resourceId('Microsoft.Network/virtualNetworks', parameters('vnetName')), '/subnets/', parameters('appSubnetName'))]",
+                "ignoreMissingVnetServiceEndpoint": false
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Sql/servers', parameters('dbServerName'))]"
+            ]
+        },
+        {
+            "comments": "Required for bastion host to populate/configure database. Not needed if going to use existing DB",
+            "type": "Microsoft.Sql/servers/firewallRules",
+            "apiVersion": "2015-05-01-preview",
+            "name": "[concat(parameters('dbServerName'), '/', 'AllowAccessToSetupVMPublicIP')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Sql/servers', parameters('dbServerName'))]"
+            ],
+            "properties": {
+                "startIpAddress": "[parameters('jumpboxPublicIpAddress')]",
+                "endIpAddress": "[parameters('jumpboxPublicIpAddress')]"
+            }
+        }
+    ],
+    "outputs": {
+        "serverName": {
+            "type": "string",
+            "value": "[reference(variables('sql').server.name).fullyQualifiedDomainName]"
+        },
+        "jdbcUrl": {
+            "type": "string",
+            "value": "[concat('jdbc:sqlserver://', reference(variables('sql').server.name).fullyQualifiedDomainName, ':1433;database=', variables('sql').database.name, ';user=', variables('sql').server.username, '@', variables('sql').server.name, ';password=', variables('sql').server.password)]"
+        }
+    }
+}

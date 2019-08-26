@@ -1,0 +1,123 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "location": {
+            "type": "string"
+        },
+        "workspaceName": {
+            "type": "string"
+        },
+        "workspaceSku": {
+            "type": "string",
+            "defaultValue": "Free",
+            "allowedValues": [
+                "Free",
+                "PerNode",
+                "Standalone",
+                "Standard",
+                "Premium",
+                "Unlimited",
+                "PerGB2018"
+            ],
+            "metadata": {
+                "description": "Workspace SKU Pricing Tier. Options depend upon when Azure Subscription created. If after 2018, use 'PerGB2018' otherwise 'Free'."
+            }
+        }
+    },
+    "variables": {
+        "workspace": {
+            "sku": "[parameters('workspaceSku')]"
+        }
+    },
+    "resources": [
+        {
+            "type": "Microsoft.OperationalInsights/workspaces",
+            "name": "[parameters('workspaceName')]",
+            "apiVersion": "2015-11-01-preview",
+            "location": "[parameters('location')]",
+            "scale": null,
+            "properties": {
+                "sku": {
+                    "name": "[variables('workspace').sku]"
+                }
+            },
+            "resources": [
+                {
+                    "apiVersion": "2015-11-01-preview",
+                    "type": "dataSources",
+                    "name": "JiraLogs",
+                    "dependsOn": [
+                        "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]"
+                    ],
+                    "kind": "CustomLog",
+                    "properties": {
+                        "customLogName": "JiraLogs",
+                        "description": "Captures all Atlassian logs found at /var/atlassian/application-data/jira/log",
+                        "inputs": [
+                            {
+                                "location": {
+                                    "fileSystemLocations": {
+                                        "linuxFileTypeLogPaths": [
+                                            "/var/atlassian/application-data/jira/log/atlassian*.log"
+                                        ]
+                                    }
+                                },
+                                "recordDelimiter": {
+                                    "regexDelimiter": {
+                                        "pattern": "((\\d{2})|(\\d{4}))-([0-1]\\d)-(([0-3]\\d)|(\\d))\\s((\\d)|([0-1]\\d)|(2[0-4])):[0-5][0-9]:[0-5][0-9]",
+                                        "matchIndex": 0,
+                                        "matchIndexSpecified": true,
+                                        "numberedGroup": null
+                                    }
+                                }
+                            }
+                        ],
+                        "extractions": [
+                            {
+                                "extractionName": "TimeGenerated",
+                                "extractionType": "DateTime",
+                                "extractionProperties": {
+                                    "dateTimeExtraction": {
+                                        "regex": [
+                                            {
+                                                "matchIndex": 0,
+                                                "pattern": "((\\d{2})|(\\d{4}))-([0-1]\\d)-(([0-3]\\d)|(\\d))\\s((\\d)|([0-1]\\d)|(2[0-4])):[0-5][0-9]:[0-5][0-9]"
+                                            }
+                                        ]
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                },
+                {
+                    "apiVersion": "2015-11-01-preview",
+                    "type": "dataSources",
+                    "name": "jiraLogCollection",
+                    "dependsOn": [
+                        "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]"
+                    ],
+                    "kind": "CustomLogCollection",
+                    "properties": {
+                        "state": "LinuxLogsEnabled"
+                    }
+                }
+            ]
+        }
+    ],
+    "outputs": {
+        "workspaceId": {
+            "value": "[reference(parameters('workspaceName')).customerId]",
+            "type": "string"
+        },
+        "workspacePrimaryKey": {
+            "value": "[listKeys(resourceId('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName')), '2015-11-01-preview').primarySharedKey]",
+            "type": "string"
+        },
+        "workspaceSecondaryKey": {
+            "value": "[listKeys(resourceId('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName')), '2015-11-01-preview').secondarySharedKey]",
+            "type": "string"
+        }
+    }
+}

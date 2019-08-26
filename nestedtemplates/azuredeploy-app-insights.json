@@ -1,0 +1,42 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "location": {
+            "type": "string",
+            "metadata": {
+                "description": "The region where Azure will house the deployment."
+            },
+            "minLength": 5
+        }
+    },
+    "variables": {
+        "namespace": "jira",
+        "appinsights": {
+            "name": "[concat(variables('namespace'), '-AppInsights-', uniqueString(resourceGroup().id))]",
+            "type": "java"
+        }
+    },
+    "resources": [
+        {
+            "name": "[variables('appinsights').name]",
+            "type": "Microsoft.Insights/components",
+            "location": "[parameters('location')]",
+            "apiVersion": "2015-05-01",
+            "properties": {
+                "ApplicationId": "[variables('appinsights').name]",
+                "Application_Type": "[variables('appinsights').type]"
+            }
+        }
+    ],
+    "outputs": {
+        "instrumentkey": {
+            "value": "[reference(variables('appinsights').name).InstrumentationKey]",
+            "type": "string"
+        },
+        "appInsightsName": {
+            "value": "[variables('appinsights').name]",
+            "type": "string"
+        }
+    }
+}

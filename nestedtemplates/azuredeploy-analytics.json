@@ -1,0 +1,77 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "location": {
+            "type": "string",
+            "metadata": {
+                "description": "The region where Azure will house the deployment."
+            },
+            "minLength": 5
+        },
+        "workspaceName": {
+            "type": "string",
+            "metadata": {
+                "description": "The name of the Azure Operations Management Suite (OMS) workspace."
+            }
+        },
+        "dbType": {
+            "type": "string",
+            "allowedValues": [
+                "sqlserver",
+                "postgres",
+                "mysql"
+            ],
+            "defaultValue": "sqlserver",
+            "metadata": {
+                "description": "The database type."
+            }
+        }
+    },
+    "variables": {
+        "solutionTypes": "AzureSQLAnalytics",
+        "sqlanalytics": {
+            "name": "[concat(variables('solutionTypes'), '(', parameters('workspaceName'), ')')]"
+        },
+        "gtwySolutionTypes": "AzureAppGatewayAnalytics",
+        "gtwyanalytics": {
+            "name": "[concat(variables('gtwySolutionTypes'), '(', parameters('workspaceName'), ')')]"
+        }
+    },
+    "resources": [
+        {
+            "comments": "name has to match the plan name or get into issues - see https://github.com/Azure/azure-quickstart-templates/issues/3172",
+            "type": "Microsoft.OperationsManagement/solutions",
+            "name": "[variables('sqlanalytics').name]",
+            "condition": "[equals(parameters('dbType'), 'sqlserver')]",
+            "apiVersion": "2015-11-01-preview",
+            "location": "[parameters('location')]",
+            "plan": {
+                "name": "[variables('sqlanalytics').name]",
+                "product": "[concat('OMSGallery/', variables('solutionTypes'))]",
+                "promotionCode": "",
+                "publisher": "Microsoft"
+            },
+            "properties": {
+                "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]"
+            }
+        },
+        {
+            "type": "Microsoft.OperationsManagement/solutions",
+            "name": "[variables('gtwyanalytics').name]",
+            "apiVersion": "2015-11-01-preview",
+            "location": "[parameters('location')]",
+            "plan": {
+                "name": "[variables('gtwyanalytics').name]",
+                "promotionCode": "",
+                "product": "[concat('OMSGallery/', variables('gtwySolutionTypes'))]",
+                "publisher": "Microsoft"
+            },
+            "properties": {
+                "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]"
+            }
+        }
+    ],
+    "outputs": {
+    }
+}

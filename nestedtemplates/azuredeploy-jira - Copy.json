@@ -1,0 +1,974 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "location": {
+            "type": "string",
+            "metadata": {
+                "description": "The region where Azure will house the deployment."
+            },
+            "minLength": 5
+        },
+        "_artifactsLocation": {
+            "type": "string",
+            "metadata": {
+                "description": "The URL specifying the location of the installation files."
+            }
+        },
+        "_artifactsLocationSasToken": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "The Shared Access Signature (SAS) token that provides access to resources in the storage account."
+            }
+        },
+        "clusterSize": {
+            "type": "int",
+            "defaultValue": 2,
+            "metadata": {
+                "description": "The number of nodes in the Jira cluster."
+            },
+            "minValue": 1
+        },
+        "clusterVmSize": {
+            "type": "string",
+            "defaultValue": "Standard_DS3_v2",
+            "allowedValues": [
+                "Standard_DS2_v2",
+                "Standard_DS3_v2",
+                "Standard_DS4_v2",
+                "Standard_DS5_v2",
+                "Standard_F4s_v2",
+                "Standard_F8s_v2",
+                "Standard_F16s_v2",
+                "Standard_F32s_v2",
+                "Standard_F64s_v2",
+                "Standard_F72s_v2",
+                "Standard_E8s_v3",
+                "Standard_E16s_v3",
+                "Standard_E20s_v3",
+                "Standard_E32s_v3"
+            ],
+            "metadata": {
+                "description": "The size of the virtual machine to use for each Jira node in the cluster."
+            }
+        },
+        "sshKey": {
+            "type": "string",
+            "metadata": {
+                "description": "The SSH public key to use to access the Jumpbox."
+            },
+            "minLength": 300
+        },
+        "sshUserName": {
+            "type": "string",
+            "defaultValue": "jiraadmin",
+            "metadata": {
+                "description": "The SSH username to use to access the Jira nodes from the Jumpbox. Note that this is the only way to access the Jira nodes."
+            }
+        },
+        "cname": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "An existing Canonical Name record (CNAME) to use to access the JIRA instance."
+            }
+        },
+        "dbCreateNew": {
+            "type": "bool",
+            "defaultValue": true,
+            "metadata": {
+                "description": "Create a new database or attempt to use an existing specified database. Note that this has to be in same resource group and location as the target deployment."
+            }
+        },
+        "dbType": {
+            "type": "string",
+            "allowedValues": [
+                "sqlserver",
+                "postgres",
+                "mysql"
+            ],
+            "defaultValue": "sqlserver",
+            "metadata": {
+                "description": "The database type."
+            }
+        },
+        "dbHost": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "The hostname of the database server."
+            }
+        },
+        "dbPort": {
+            "type": "string",
+            "defaultValue": "[if(equals(parameters('dbType'), 'sqlserver'), '1433', if(equals(parameters('dbType'), 'postgres'), '5432', '3306'))]",
+            "metadata": {
+                "description": "The database port to use."
+            }
+        },
+        "dbDatabase": {
+            "type": "string",
+            "defaultValue": "jira",
+            "metadata": {
+                "description": "The name of the Jira database."
+            }
+        },
+        "dbSchema": {
+            "type": "string",
+            "defaultValue": "[if(parameters('dbCreateNew'), if(equals(parameters('dbType'), 'sqlserver'), 'jiraschema', 'public'), 'jiraschema')]",
+            "metadata": {
+                "description": "The Jira database schema to use."
+            }
+        },
+        "dbUsername": {
+            "type": "string",
+            "metadata": {
+                "description": "The username of the Jira database user."
+            }
+        },
+        "dbPassword": {
+            "type": "securestring",
+            "metadata": {
+                "description": "The password of the Jira database user."
+            }
+        },
+        "dbTier": {
+            "type": "string",
+            "allowedValues": [
+                "Basic",
+                "Standard",
+                "Premium",
+                "GeneralPurpose",
+                "BusinessCritical"
+            ],
+            "defaultValue": "Standard",
+            "metadata": {
+                "description": "The database service tier."
+            }
+        },
+        "dbTierSize": {
+            "type": "string",
+            "allowedValues": [
+                "Basic",
+                "S1",
+                "S2",
+                "S3",
+                "S4",
+                "S6",
+                "S7",
+                "S9",
+                "S12",
+                "P1",
+                "P2",
+                "P4",
+                "P6",
+                "P11",
+                "P15",
+                "GP_Gen4_1",
+                "GP_Gen4_10",
+                "GP_Gen4_16",
+                "GP_Gen4_2",
+                "GP_Gen4_24",
+                "GP_Gen4_3",
+                "GP_Gen4_4",
+                "GP_Gen4_5",
+                "GP_Gen4_6",
+                "GP_Gen4_7",
+                "GP_Gen4_8",
+                "GP_Gen4_9",
+                "GP_Gen5_10",
+                "GP_Gen5_12",
+                "GP_Gen5_14",
+                "GP_Gen5_16",
+                "GP_Gen5_18",
+                "GP_Gen5_2",
+                "GP_Gen5_20",
+                "GP_Gen5_24",
+                "GP_Gen5_32",
+                "GP_Gen5_4",
+                "GP_Gen5_40",
+                "GP_Gen5_6",
+                "GP_Gen5_8",
+                "GP_Gen5_80",
+                "BC_Gen4_1",
+                "BC_Gen4_10",
+                "BC_Gen4_16",
+                "BC_Gen4_2",
+                "BC_Gen4_24",
+                "BC_Gen4_3",
+                "BC_Gen4_4",
+                "BC_Gen4_5",
+                "BC_Gen4_6",
+                "BC_Gen4_7",
+                "BC_Gen4_8",
+                "BC_Gen4_9",
+                "BC_Gen5_10",
+                "BC_Gen5_12",
+                "BC_Gen5_14",
+                "BC_Gen5_16",
+                "BC_Gen5_18",
+                "BC_Gen5_2",
+                "BC_Gen5_20",
+                "BC_Gen5_24",
+                "BC_Gen5_32",
+                "BC_Gen5_4",
+                "BC_Gen5_40",
+                "BC_Gen5_6",
+                "BC_Gen5_8",
+                "BC_Gen5_80"
+            ],
+            "defaultValue": "S2",
+            "metadata": {
+                "description": "The size of the database service tier. Basic, Standard (S1..S12) and Premium (P1..P15) tier sizes are available."
+            }
+        },
+        "postgresDbSku": {
+            "type": "string",
+            "defaultValue": "GP_Gen5_4",
+            "allowedValues": [
+                "GP_Gen5_2",
+                "GP_Gen5_4",
+                "GP_Gen5_8",
+                "GP_Gen5_16",
+                "GP_Gen5_32",
+                "MO_Gen5_2",
+                "MO_Gen5_4",
+                "MO_Gen5_8",
+                "MO_Gen5_16",
+                "MO_Gen5_32"
+            ],
+            "metadata": {
+                "description": "The SKU (stock keeping unit) name of the PostgresSQL instance. Follows the convention {pricing tier}{compute generation}{vCores} eg General Purpose, Generation 5, 4 cores is GP_Gen5_4."
+            }
+        },
+        "postgresDbStorage": {
+            "type": "int",
+            "defaultValue": 102400,
+            "minValue": 102400,
+            "maxValue": 4194304,
+            "metadata": {
+                "description": "The storage size of the PostgresSQL instance."
+            }
+        },
+        "jiraProduct": {
+            "type": "string",
+            "allowedValues": [
+                "jira-software",
+                "servicedesk"
+            ],
+            "defaultValue": "jira-software",
+            "metadata": {
+                "description": "The Jira software product to install."
+            }
+        },
+        "jiraVersion": {
+            "type": "string",
+            "defaultValue": "latest",
+            "metadata": {
+                 "description": "The Jira software product version to install. By default the deployment will download and use the latest version published."
+             }
+         },
+         "customDownloadUrl": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                 "description": "Use this URL to override standard Atlassian download url eg for EAP, RC versions. NB will be used in conjunction with the jiraVersion parameter."
+             }
+         },
+        "jiraAdminUserName": {
+            "type": "string",
+            "defaultValue": "admin",
+            "minLength": 5,
+            "metadata": {
+                "description": "The username for the Jira administrator's account."
+            }
+        },
+        "jiraAdminUserPassword": {
+            "type": "securestring",
+            "minLength": 5,
+            "metadata": {
+                "description": "The password for the Jira administrator's account."
+            }
+        },
+        "jiraAdminUserFullname": {
+            "type": "string",
+            "minLength": 5,
+            "metadata": {
+                "description": "The fullname for the Jira administrator's account."
+            }
+        },
+        "jiraAdminUserEmail": {
+            "type": "string",
+            "minLength": 5,
+            "metadata": {
+                "description": "The email address of the Jira administrator user."
+            }
+        },
+        "jiraAppTitle": {
+            "type": "string",
+            "defaultValue": "Atlassian Jira",
+            "metadata": {
+                "description": "The name of the Jira site."
+            }
+        },
+        "appGtwyClusterSize": {
+            "type": "int",
+            "allowedValues": [
+                1,
+                2,
+                3,
+                4,
+                5,
+                6
+            ],
+            "defaultValue": 2,
+            "minValue": 1,
+            "metadata": {
+                "description": "The number of nodes in the Application Gateway cluster."
+            }
+        },
+        "appGtwyTier": {
+            "type": "string",
+            "allowedValues": [
+                "Standard_Small",
+                "Standard_Medium",
+                "Standard_Large"
+            ],
+            "defaultValue": "Standard_Medium",
+            "metadata": {
+                "description": "The Application Gateway size."
+            }
+        },
+        "vnetName": {
+            "type": "string",
+            "metadata": {
+                "description": "The name of the Jira virtual network."
+            }
+        },
+        "appSubnetName": {
+            "type": "string",
+            "metadata": {
+                "description": "The name of the subnet within the Jira virtual network where the Jira cluster is located."
+            }
+        },
+        "gtwySubnetName": {
+            "type": "string",
+            "metadata": {
+                "description": "The name of the Jira virtual network subnet where the Application Gateway is located."
+            }
+        },
+        "jumpboxName": {
+            "type": "string",
+            "metadata": {
+                "description": "The name of the Jumpbox."
+            }
+        },
+        "jumpboxPublicIpAddress": {
+            "type": "string",
+            "metadata": {
+                "description": "The public IP address of the Jumpbox."
+            }
+        },
+        "sslBase64EncodedPfxCertificate": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "The certificate to be used for SSL termination on the Azure Application Gateway."
+            }
+        },
+        "sslPfxCertificatePassword": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "The password of the certificate for SSL termination."
+            }
+        },
+        "enableApplicationInsights": {
+            "type": "bool",
+            "defaultValue": true,
+            "metadata": {
+                "description": "Enable Azure Application Insights."
+            }
+        },
+        "enableAnalytics": {
+            "type": "bool",
+            "defaultValue": true,
+            "metadata": {
+                "description": "Enable Azure Operational Insights."
+            }
+        },
+        "enableAcceleratedNetworking": {
+            "type": "bool",
+            "defaultValue": true,
+            "metadata": {
+                "description": "Enable accelerated networking. Note that this needs to be on a supported instance type."
+            }
+        },
+        "workspaceSku": {
+            "type": "string",
+            "defaultValue": "Free",
+            "allowedValues": [
+                "Free",
+                "PerNode",
+                "Standalone",
+                "Standard",
+                "Premium",
+                "Unlimited",
+                "PerGB2018"
+            ],
+            "metadata": {
+                "description": "Workspace SKU Pricing Tier. Options depend upon when Azure Subscription created. If after 2018, use 'PerGB2018' otherwise 'Free'."
+            }
+        },
+        "clusterVmDiskSize" : {
+            "type": "int",
+            "defaultValue": 1000,
+            "metadata": {
+                "description": "The desired size of the Cluster Node's allocation disk in GB"
+            }
+        },
+        "clusterVmDiskCount" : {
+            "type": "int",
+            "defaultValue": 8,
+            "minValue": 8,
+            "maxValue": 32,
+            "metadata": {
+                "description": "The requested Cluster Node disk will be striped for performance. Essentially the desired disk size will be divided by the clusterVmDiskCount and can't exceed 1023 GB. The clusterVmDiskCount count can't exceed the MaxDiskCount assigned to the VM Size."
+            }
+        },
+        "linuxOsType": {
+            "type": "string",
+            "defaultValue": "Canonical:UbuntuServer:18.04-LTS",
+            "allowedValues": [
+                "Canonical:UbuntuServer:16.04-LTS",
+                "Canonical:UbuntuServer:18.04-LTS",
+                "RedHat:RHEL:7.5",
+                "OpenLogic:CentOS:7.5",
+                "credativ:Debian:9-backports"
+            ],
+            "metadata": {
+                "description": "Select your preferred Linux OS type. Bear in mind, the Linux OS type has to support Accelerated Networking as well - https://docs.microsoft.com/en-us/azure/virtual-network/create-vm-accelerated-networking-cli"
+            }
+        }
+    },
+    "variables": {
+        "namespace": "jira",
+        "dbTemplateUri": "[uri(parameters('_artifactsLocation'), concat(if(equals(parameters('dbType'),'sqlserver'),'nestedtemplates/azuredeploy-db-mssql.json','nestedtemplates/azuredeploy-db-postgres.json'), parameters('_artifactsLocationSasToken')))]",
+        "vmssTemplateUri": "[uri(parameters('_artifactsLocation'), concat('nestedtemplates/azuredeploy-jira-vmss.json', parameters('_artifactsLocationSasToken')))]",
+        "byodbTemplateUri": "[uri(parameters('_artifactsLocation'), concat('nestedtemplates/azuredeploy-byodb.json', parameters('_artifactsLocationSasToken')))]",
+        "appGtwyTemplateUri": "[uri(parameters('_artifactsLocation'), concat('nestedtemplates/azuredeploy-jira-gtwy.json', parameters('_artifactsLocationSasToken')))]",
+        "appInsightsTemplateUri": "[uri(parameters('_artifactsLocation'), concat('nestedtemplates/azuredeploy-app-insights.json', parameters('_artifactsLocationSasToken')))]",
+        "workspaceTemplateUri": "[uri(parameters('_artifactsLocation'), concat('nestedtemplates/azuredeploy-workspace.json', parameters('_artifactsLocationSasToken')))]",
+        "analyticsTemplateUri": "[uri(parameters('_artifactsLocation'), concat('nestedtemplates/azuredeploy-analytics.json', parameters('_artifactsLocationSasToken')))]",
+        "tags": {
+            "vendor": "Atlassian",
+            "product": "JIRA",
+            "provider": "2F0AF47A-92C7-413A-9009-C3815BFF7AF6"
+        },
+        "jira": {
+            "storage": {
+                "name": "[concat(variables('namespace'), 'storage', uniqueString(resourceGroup().id))]"
+            }
+        },
+        "workspace": {
+            "name": "[concat(variables('namespace'), '-monitorworkspace-', uniqueString(resourceGroup().id))]",
+            "sku": "[parameters('workspaceSku')]",
+            "retentionInDays": 7
+        },
+        "gtwyIpName": "[concat(variables('namespace'), '-appgtwyip-', uniqueString(resourceGroup().id))]",
+        "gtwyName": "[if(empty(parameters('sslBase64EncodedPfxCertificate')), concat(variables('namespace'), 'appgateway'), concat(variables('namespace'), 'appgateway-https'))]",
+        "gtwyAddressPoolName": "[concat(variables('namespace'), 'appgwaddrpool')]",
+        "dbTemplate": "[if(equals(parameters('dbType'),'sqlserver'), 'sqlDbTemplate', 'postgresDbTemplate')]"
+    },
+    "resources": [
+        {
+            "apiVersion": "2018-05-01",
+            "name": "workspaceTemplate",
+            "type": "Microsoft.Resources/deployments",
+            "condition": "[parameters('enableAnalytics')]",
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[variables('workspaceTemplateUri')]",
+                    "contentVersion": "1.0.0.0"
+                },
+                "parameters": {
+                    "location": {
+                        "value": "[parameters('location')]"
+                    },
+                    "workspaceName": {
+                        "value": "[variables('workspace').name]"
+                    },
+                    "workspaceSku": {
+                        "value": "[parameters('workspaceSku')]"
+                    }
+                }
+            }
+        },
+        {
+            "apiVersion": "2018-05-01",
+            "name": "sqlDbTemplate",
+            "type": "Microsoft.Resources/deployments",
+            "condition": "[and(parameters('dbCreateNew'), equals(parameters('dbType'), 'sqlserver'))]",
+            "dependsOn": [
+                "workspaceTemplate"
+            ],
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[variables('dbTemplateUri')]",
+                    "contentVersion": "1.0.0.0"
+                },
+                "parameters": {
+                    "location": {
+                        "value": "[parameters('location')]"
+                    },
+                    "dbServerName": {
+                        "value": "[parameters('dbHost')]"
+                    },
+                    "dbDatabaseName": {
+                        "value": "[parameters('dbDatabase')]"
+                    },
+                    "dbPassword": {
+                        "value": "[parameters('dbPassword')]"
+                    },
+                    "dbUsername": {
+                        "value": "[parameters('dbUsername')]"
+                    },
+                    "dbTier": {
+                        "value": "[parameters('dbTier')]"
+                    },
+                    "dbTierSize": {
+                        "value": "[parameters('dbTierSize')]"
+                    },
+                    "vnetName": {
+                        "value": "[parameters('vnetName')]"
+                    },
+                    "appSubnetName": {
+                        "value": "[parameters('appSubnetName')]"
+                    },
+                    "workspaceName": {
+                        "value": "[variables('workspace').name]"
+                    },
+                    "enableAnalytics": {
+                        "value": "[parameters('enableAnalytics')]"
+                    },
+                    "jumpboxPublicIpAddress": {
+                        "value": "[parameters('jumpboxPublicIpAddress')]"
+                    }
+                }
+            }
+        },
+        {
+            "apiVersion": "2018-05-01",
+            "name": "postgresDbTemplate",
+            "type": "Microsoft.Resources/deployments",
+            "condition": "[and(parameters('dbCreateNew'), equals(parameters('dbType'), 'postgres'))]",
+            "dependsOn": [
+                "workspaceTemplate"
+            ],
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[variables('dbTemplateUri')]",
+                    "contentVersion": "1.0.0.0"
+                },
+                "parameters": {
+                    "location": {
+                        "value": "[parameters('location')]"
+                    },
+                    "dbServerName": {
+                        "value": "[parameters('dbHost')]"
+                    },
+                    "dbDatabaseName": {
+                        "value": "[parameters('dbDatabase')]"
+                    },
+                    "dbUsername": {
+                        "value": "[parameters('dbUsername')]"
+                    },
+                    "dbPassword": {
+                        "value": "[parameters('dbPassword')]"
+                    },
+                    "postgresDbSku": {
+                        "value": "[parameters('postgresDbSku')]"
+                    },
+                    "postgresDbStorage": {
+                        "value": "[parameters('postgresDbStorage')]"
+                    },
+                    "vnetName": {
+                        "value": "[parameters('vnetName')]"
+                    },
+                    "appSubnetName": {
+                        "value": "[parameters('appSubnetName')]"
+                    },
+                    "jumpboxPublicIpAddress": {
+                        "value": "[parameters('jumpboxPublicIpAddress')]"
+                    },
+                    "workspaceName": {
+                        "value": "[variables('workspace').name]"
+                    },
+                    "enableAnalytics": {
+                        "value": "[parameters('enableAnalytics')]"
+                    }
+                }
+            }
+        },
+        {
+            "apiVersion": "2018-05-01",
+            "name": "byodbTemplate",
+            "type": "Microsoft.Resources/deployments",
+            "condition": "[not(parameters('dbCreateNew'))]",
+            "dependsOn": [
+                "workspaceTemplate"
+            ],
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[variables('byodbTemplateUri')]",
+                    "contentVersion": "1.0.0.0"
+                },
+                "parameters": {
+                    "dbType": {
+                        "value": "[parameters('dbType')]"
+                    },
+                    "dbServerName": {
+                        "value": "[parameters('dbHost')]"
+                    },
+                    "dbDatabaseName": {
+                        "value": "[parameters('dbDatabase')]"
+                    },
+                    "dbPort": {
+                        "value": "[parameters('dbPort')]"
+                    },
+                    "dbPassword": {
+                        "value": "[parameters('dbPassword')]"
+                    },
+                    "dbUsername": {
+                        "value": "[parameters('dbUsername')]"
+                    },
+                    "vnetName": {
+                        "value": "[parameters('vnetName')]"
+                    },
+                    "appSubnetName": {
+                        "value": "[parameters('appSubnetName')]"
+                    }
+                }
+            }
+        },
+        {
+            "apiVersion": "2018-05-01",
+            "name": "appInsightsTemplate",
+            "type": "Microsoft.Resources/deployments",
+            "condition": "[parameters('enableApplicationInsights')]",
+            "dependsOn": [
+                "workspaceTemplate",
+                "[variables('dbTemplate')]"
+            ],
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[variables('appInsightsTemplateUri')]",
+                    "contentVersion": "1.0.0.0"
+                },
+                "parameters": {
+                    "location": {
+                        "value": "[parameters('location')]"
+                    }
+                }
+            }
+        },
+        {
+            "apiVersion": "2018-05-01",
+            "name": "analyticsTemplate",
+            "type": "Microsoft.Resources/deployments",
+            "condition": "[parameters('enableAnalytics')]",
+            "dependsOn": [
+                "workspaceTemplate",
+                "[variables('dbTemplate')]"
+            ],
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[variables('analyticsTemplateUri')]",
+                    "contentVersion": "1.0.0.0"
+                },
+                "parameters": {
+                    "location": {
+                        "value": "[parameters('location')]"
+                    },
+                    "workspaceName": {
+                        "value": "[variables('workspace').name]"
+                    },
+                    "dbType": {
+                        "value": "[parameters('dbType')]"
+                    }
+                }
+            }
+        },
+        {
+            "apiVersion": "2018-08-01",
+            "type": "Microsoft.Network/publicIPAddresses",
+            "name": "[variables('gtwyIpName')]",
+            "location": "[parameters('location')]",
+            "sku": {
+                "name": "Basic"
+            },
+            "zones": [],
+            "properties": {
+                "publicIPAllocationMethod": "Dynamic",
+                "idleTimeoutInMinutes": 4,
+                "dnsSettings": {
+                    "domainNameLabel": "[variables('gtwyIpName')]"
+                }
+            }
+        },
+        {
+            "apiVersion": "2018-05-01",
+            "name": "appGtwyTemplate",
+            "type": "Microsoft.Resources/deployments",
+            "dependsOn": [
+                "workspaceTemplate",
+                "[variables('gtwyIpName')]"
+            ],
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[variables('appGtwyTemplateUri')]",
+                    "contentVersion": "1.0.0.0"
+                },
+                "parameters": {
+                    "location": {
+                        "value": "[parameters('location')]"
+                    },
+                    "gtwyIpName": {
+                        "value": "[variables('gtwyIpName')]"
+                    },
+                    "gtwyName": {
+                        "value": "[variables('gtwyName')]"
+                    },
+                    "gtwyAddressPoolName": {
+                        "value": "[variables('gtwyAddressPoolName')]"
+                    },
+                    "appGtwyClusterSize": {
+                        "value": "[parameters('appGtwyClusterSize')]"
+                    },
+                    "appGtwyTier": {
+                        "value": "[parameters('appGtwyTier')]"
+                    },
+                    "vnetName": {
+                        "value": "[parameters('vnetName')]"
+                    },
+                    "gtwySubnetName": {
+                        "value": "[parameters('gtwySubnetName')]"
+                    },
+                    "sslBase64EncodedPfxCertificate": {
+                        "value": "[parameters('sslBase64EncodedPfxCertificate')]"
+                    },
+                    "sslPfxCertificatePassword": {
+                        "value": "[parameters('sslPfxCertificatePassword')]"
+                    },
+                    "workspaceName": {
+                        "value": "[variables('workspace').name]"
+                    },
+                    "enableAnalytics": {
+                        "value": "[parameters('enableAnalytics')]"
+                    }
+                }
+            }
+        },
+        {
+            "apiVersion": "2018-05-01",
+            "name": "vmssTemplate",
+            "type": "Microsoft.Resources/deployments",
+            "dependsOn": [
+                "[concat('Microsoft.Storage/storageAccounts/', variables('jira').storage.name)]",
+                "[variables('dbTemplate')]",
+                "byodbTemplate"
+            ],
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[variables('vmssTemplateUri')]",
+                    "contentVersion": "1.0.0.0"
+                },
+                "parameters": {
+                    "_artifactsLocation": {
+                        "value": "[parameters('_artifactsLocation')]"
+                    },
+                    "_artifactsLocationSasToken": {
+                        "value": "[parameters('_artifactsLocationSasToken')]"
+                    },
+                    "location": {
+                        "value": "[parameters('location')]"
+                    },
+                    "clusterSize": {
+                        "value": "[parameters('clusterSize')]"
+                    },
+                    "clusterVmSize": {
+                        "value": "[parameters('clusterVmSize')]"
+                    },
+                    "sshUserName": {
+                        "value": "[parameters('sshUserName')]"
+                    },
+                    "sshKey": {
+                        "value": "[parameters('sshKey')]"
+                    },
+                    "cname": {
+                        "value": "[parameters('cname')]"
+                    },
+                    "dbCreateNew": {
+                        "value": "[parameters('dbCreateNew')]"
+                    },
+                    "dbType": {
+                        "value": "[parameters('dbType')]"
+                    },
+                    "dbPort": {
+                        "value": "[parameters('dbPort')]"
+                    },
+                    "dbDatabase": {
+                        "value": "[parameters('dbDatabase')]"
+                    },
+                    "dbSchema": {
+                        "value": "[parameters('dbSchema')]"
+                    },
+                    "dbUsername": {
+                        "value": "[parameters('dbUsername')]"
+                    },
+                    "dbPassword": {
+                        "value": "[parameters('dbPassword')]"
+                    },
+                    "jiraProduct": {
+                        "value": "[parameters('jiraProduct')]"
+                    },
+                    "jiraVersion": {
+                        "value": "[parameters('jiraVersion')]"
+                    },
+                    "customDownloadUrl": {
+                        "value": "[parameters('customDownloadUrl')]"
+                    },
+                    "jiraAdminUserName": {
+                        "value": "[parameters('jiraAdminUserName')]"
+                    },
+                    "jiraAdminUserPassword": {
+                        "value": "[parameters('jiraAdminUserPassword')]"
+                    },
+                    "jiraAdminUserFullname": {
+                        "value": "[parameters('jiraAdminUserFullname')]"
+                    },
+                    "jiraAdminUserEmail": {
+                        "value": "[parameters('jiraAdminUserEmail')]"
+                    },
+                    "jiraAppTitle": {
+                        "value": "[parameters('jiraAppTitle')]"
+                    },
+                    "vnetName": {
+                        "value": "[parameters('vnetName')]"
+                    },
+                    "appSubnetName": {
+                        "value": "[parameters('appSubnetName')]"
+                    },
+                    "jumpboxName": {
+                        "value": "[parameters('jumpboxName')]"
+                    },
+                    "sslBase64EncodedPfxCertificate": {
+                        "value": "[parameters('sslBase64EncodedPfxCertificate')]"
+                    },
+                    "appInsightsInstrumentKey": {
+                        "value": "[if(parameters('enableApplicationInsights'), reference('appInsightsTemplate').outputs.instrumentkey.value, '')]"
+                    },
+                    "gtwyName": {
+                        "value": "[variables('gtwyName')]"
+                    },
+                    "gtwyAddressPoolName": {
+                        "value": "[variables('gtwyAddressPoolName')]"
+                    },
+                    "jiraBaseUrl": {
+                        "value": "[if(not(empty(parameters('cname'))), parameters('cname'), reference(variables('gtwyIpName')).dnsSettings.fqdn)]"
+                    },
+                    "jiraDbServerName": {
+                        "value": "[if(parameters('dbCreateNew'), reference(variables('dbTemplate')).outputs.serverName.value, parameters('dbHost'))]"
+                    },
+                    "storageAccessKey": {
+                        "value": "[listKeys(resourceId('Microsoft.Storage/storageAccounts/', variables('jira').storage.name), '2017-06-01').keys[0].value]"
+                    },
+                    "enableAcceleratedNetworking": {
+                        "value": "[parameters('enableAcceleratedNetworking')]"
+                    },
+                    "workspaceId": {
+                        "value": "[if(parameters('enableAnalytics'), reference('workspaceTemplate').outputs.workspaceId.value, '')]"
+                    },
+                    "workspacePrimaryKey": {
+                        "value": "[if(parameters('enableAnalytics'), reference('workspaceTemplate').outputs.workspacePrimaryKey.value, '')]"
+                    },
+                    "workspaceSecondaryKey": {
+                        "value": "[if(parameters('enableAnalytics'), reference('workspaceTemplate').outputs.workspaceSecondaryKey.value, '')]"
+                    },
+                    "clusterVmDiskSize" : {
+                        "value": "[parameters('clusterVmDiskSize')]"
+                    },
+                    "clusterVmDiskCount" : {
+                        "value": "[parameters('clusterVmDiskCount')]"
+                    },
+                    "linuxOsType": {
+                        "value": "[parameters('linuxOsType')]"
+                    },
+                    "blobStorageUri": {
+                        "value": "[reference(concat('Microsoft.Storage/storageAccounts/', variables('jira').storage.name), '2017-06-01').primaryEndpoints.blob]"
+                    }
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts",
+            "apiVersion": "2018-07-01",
+            "name": "[variables('jira').storage.name]",
+            "location": "[parameters('location')]",
+            "sku": {
+                "name": "Standard_GRS",
+                "tier": "Standard"
+            },
+            "kind": "StorageV2",
+            "properties": {},
+            "tags": "[variables('tags')]"
+        }
+    ],
+    "outputs": {
+        "jdbcUrl": {
+            "type": "string",
+            "value": "[if(parameters('dbCreateNew'), reference(variables('dbTemplate')).outputs.jdbcUrl.value, reference('byodbTemplate').outputs.jdbcUrl.value)]"
+        },
+        "jiraAppEndpoint": {
+            "type": "string",
+            "value": "[reference(variables('gtwyIpName')).dnsSettings.fqdn]"
+        },
+        "gtwyIpName": {
+            "type": "string",
+            "value": "[variables('gtwyIpName')]"
+        },
+        "gtwyName": {
+            "type": "string",
+            "value": "[variables('gtwyName')]"
+        },
+        "storageAccountName": {
+            "type": "string",
+            "value": "[variables('jira').storage.name]"
+        },
+        "clusterName": {
+            "type": "string",
+            "value": "[reference('vmssTemplate').outputs.clusterName.value]"
+        },
+        "appInsightsName": {
+            "type": "string",
+            "value": "[if(parameters('enableApplicationInsights'), reference('appInsightsTemplate').outputs.appInsightsName.value, '')]"
+        },
+        "dbDatabaseServerName": {
+            "type": "string",
+            "value": "[parameters('dbHost')]"
+        },
+        "dbDatabaseName": {
+            "type": "string",
+            "value": "[parameters('dbDatabase')]"
+        }
+    }
+}
